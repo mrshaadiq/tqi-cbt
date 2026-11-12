@@ -71,18 +71,19 @@ export function Icon({ name, size, className = '' }: { name: string; size: numbe
   return <img src={`/icons/${name}.svg`} alt="" width={size} height={size} className={`shrink-0 ${className}`} />;
 }
 
+/** Logo Taman Qur'an Indonesia (public/logo-tqi.png, 2691x513). Teks hitam: pakai di latar terang. */
+export function Logo({ className = 'h-8' }: { className?: string }) {
+  // eslint-disable-next-line @next/next/no-img-element
+  return <img src="/logo-tqi.png" alt="Taman Qur'an Indonesia" width={2691} height={513} className={`w-auto shrink-0 ${className}`} />;
+}
+
 /** Header peserta: logo + judul, slot kanan di layar lebar, avatar inisial di HP. */
 export function PesertaHeader({ name, no, right }: { name?: string; no?: string | null; right?: ReactNode }) {
   const initials = (name ?? '').split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join('').toUpperCase();
   return (
     <header className="flex items-center gap-3 border-b border-line bg-white px-4 py-3 md:px-12 md:py-3.5">
-      <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-600 md:h-9 md:w-9 md:rounded-[10px]">
-        <Icon name="shield-white-21" size={21} className="h-[19px] w-[19px] md:h-[21px] md:w-[21px]" />
-      </div>
-      <span className="text-base font-semibold leading-6 text-brand-700">
-        <span className="md:hidden">Tes Dasar · TQI</span>
-        <span className="hidden md:inline">Tes Kemampuan Dasar · TQI</span>
-      </span>
+      <Logo className="h-7 md:h-9" />
+      <span className="hidden border-l border-line pl-3 text-base font-semibold leading-6 text-brand-700 md:inline">Tes Kemampuan Dasar</span>
       <div className="flex-1" />
       {right}
       {name && (

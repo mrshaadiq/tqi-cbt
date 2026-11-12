@@ -9,7 +9,7 @@ import { SnapshotScheduler } from '@/lib/snapshotScheduler';
 import { isMostlyArabic } from '@/lib/text';
 import { questionImageUrl } from '@/lib/supabase';
 import RtlText from '@/components/RtlText';
-import { Button, Icon, Modal } from '@/components/ui';
+import { Button, Icon, Logo, Modal } from '@/components/ui';
 import QuestionNav, { type AnswerMap } from './QuestionNav';
 
 type Props = {
@@ -222,10 +222,8 @@ export default function ExamRunner({ state, token, profile, clock, streamRef, on
   return (
     <div className="flex min-h-screen flex-col bg-page pb-[71px] md:h-screen md:pb-0">
       <header className="flex items-center gap-2.5 border-b border-line bg-white px-4 py-2.5 md:gap-4 md:px-8 md:py-3">
-        <div className="flex h-8 w-8 items-center justify-center rounded-[10px] bg-brand-600 md:h-9 md:w-9">
-          <Icon name="shield-white-21" size={21} className="h-[19px] w-[19px] md:h-[21px] md:w-[21px]" />
-        </div>
-        <span className="hidden text-base font-semibold leading-6 text-brand-700 md:inline">Tes Kemampuan Dasar · TQI</span>
+        <Logo className="h-7 md:h-9" />
+        <span className="hidden border-l border-line pl-4 text-base font-semibold leading-6 text-brand-700 md:inline">Tes Kemampuan Dasar</span>
         <div className="order-last flex-1 md:order-none" />
         <div className={`order-2 flex items-center gap-2 rounded-full border px-3 py-1.5 md:order-none md:px-4 md:py-2 ${low ? 'border-danger-600/30 bg-danger-50' : 'border-brand-100 bg-brand-50'}`}>
           <Icon name="clock-brand-16" size={16} className="md:hidden" />

@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { currentProfile, logout, type Profile } from '@/lib/auth';
-import { Icon, Spinner } from '@/components/ui';
+import { Icon, Logo, Spinner } from '@/components/ui';
 
 const NAV = [
   { href: '/admin/pantau/', label: 'Pantauan Live', icon: 'nav-activity' },
@@ -67,8 +67,8 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
 
   const brand = (
     <div className="flex items-center gap-2.5 pb-4">
-      <div className="flex h-9 w-9 items-center justify-center rounded-[10px] bg-brand-600">
-        <Icon name="shield-white-21" size={21} />
+      <div className="rounded-lg bg-white px-2 py-1.5">
+        <Logo className="h-7" />
       </div>
       <span className="text-base font-semibold leading-6 text-white">Panel Panitia</span>
     </div>

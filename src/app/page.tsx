@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { login, currentProfile } from '@/lib/auth';
-import { Button, Field, Icon, inputCls } from '@/components/ui';
+import { Button, Field, Icon, inputCls, Logo } from '@/components/ui';
 
 const POINTS = [
   { icon: 'save-light', text: 'Jawaban tersimpan otomatis' },
@@ -41,8 +41,8 @@ export default function LoginPage() {
   return (
     <main className="flex min-h-screen flex-col bg-page lg:flex-row">
       <section className="flex flex-col gap-4 bg-brand-700 px-6 pb-8 pt-10 lg:w-[640px] lg:shrink-0 lg:justify-center lg:gap-7 lg:p-[72px]">
-        <div className="flex h-12 w-12 items-center justify-center rounded-[10px] bg-brand-600 lg:h-14 lg:w-14">
-          <Icon name="shield-white-32" size={32} className="h-7 w-7 lg:h-8 lg:w-8" />
+        <div className="self-start rounded-[10px] bg-white px-3 py-2 lg:px-4 lg:py-3">
+          <Logo className="h-9 lg:h-12" />
         </div>
         <h1 className="text-2xl font-bold leading-8 text-white lg:text-[32px] lg:leading-10">Tes Kemampuan Dasar Akademik</h1>
         <p className="text-sm leading-5 text-brand-100 lg:text-base lg:leading-6">
