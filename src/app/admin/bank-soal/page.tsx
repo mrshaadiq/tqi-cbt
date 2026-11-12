@@ -1,7 +1,7 @@
 'use client';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { deleteQuestion, isProblematic, listQuestions, rowToDraft, saveQuestions, setQuestionActive, updateQuestion, type QuestionRow } from '@/lib/adminApi';
+import { clearBank, deleteQuestion, isProblematic, listQuestions, rowToDraft, saveQuestions, setQuestionActive, updateQuestion, type QuestionRow } from '@/lib/adminApi';
 import { validateDrafts } from '@/lib/import/validate';
 import { emptyDraft, type DraftQuestion } from '@/lib/import/types';
 import { isMostlyArabic } from '@/lib/text';
@@ -69,6 +69,13 @@ export default function BankSoalPage() {
     catch (e) { setMsg(e instanceof Error ? e.message : 'Gagal menyimpan'); }
   }
 
+  async function deleteAll() {
+    if (!rows!.length) return;
+    if (!confirm(`Hapus SEMUA ${rows!.length} soal? Soal yang sudah dipakai ujian hanya akan dinonaktifkan. Tindakan ini tidak bisa dibatalkan.`)) return;
+    try { await clearBank(); setEditId(null); setPage(0); setMsg(''); await load(); }
+    catch (e) { setMsg(e instanceof Error ? e.message : 'Gagal menghapus soal'); }
+  }
+
   function label(q: QuestionRow) {
     if (isProblematic(q)) return <Badge tone="danger">Perlu diisi</Badge>;
     if (!q.is_active) return <Badge tone="neutral">Nonaktif</Badge>;
@@ -86,6 +93,7 @@ export default function BankSoalPage() {
         </div>
         <div className="flex-1" />
         <div className="flex gap-3">
+          <button disabled={!rows.length} onClick={deleteAll} className="inline-flex items-center justify-center rounded-[10px] border border-danger-600 bg-white px-5 py-3 text-sm font-medium leading-5 text-danger-600 hover:bg-danger-50 disabled:opacity-50">Hapus Semua</button>
           <Button variant="secondary" onClick={() => setAdding({ ...emptyDraft(), options: ['A', 'B', 'C', 'D'].map((l) => ({ label: l as 'A', body: '' })) })}>Tambah Soal</Button>
           <Link href="/admin/import/" className="inline-flex items-center justify-center rounded-[10px] bg-brand-600 px-5 py-3 text-sm font-medium leading-5 text-white hover:bg-brand-700">Impor Soal</Link>
         </div>
