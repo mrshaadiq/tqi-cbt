@@ -2,7 +2,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import { createParticipants, listParticipants, resetPassword, resetSession, setCameraExcluded, type ParticipantRow } from '@/lib/adminApi';
 import { generateCredentials, parsePastedRows } from '@/lib/credentials';
-import { downloadBlob, exportAccountsXlsx } from '@/lib/export/excel';
+import { DEFAULT_PARTICIPANT_PASSWORD as DEFAULT_PW } from '@/lib/config';
+import { parseParticipantsExcel } from '@/lib/import/participants';
+import { downloadBlob, exportAccountsXlsx, exportParticipantTemplateXlsx } from '@/lib/export/excel';
 import { Badge, Button, Icon, Modal, Spinner, Toggle } from '@/components/ui';
 
 const colsCls = 'md:grid md:grid-cols-[200px_160px_100px_1fr] md:items-center md:gap-3';
@@ -24,16 +26,26 @@ export default function PesertaPage() {
     try { pending = parsePastedRows(text).length; } catch { pending = 0; }
   }
 
+  async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0];
+    e.target.value = '';
+    if (!f) return;
+    setMsg(''); setFailed([]);
+    try {
+      const list = await parseParticipantsExcel(f, f.name);
+      if (!list.length) return setMsg('File tidak berisi data peserta. Kolom: Nama dan Nomor Pendaftaran.');
+      setText(list.map((r) => `${r.fullName};${r.participantNo}`).join('\n'));
+      setMsg(`${list.length} peserta dibaca dari ${f.name}. Periksa daftar di bawah, lalu klik tombol buat akun.`);
+    } catch { setMsg('File tidak bisa dibaca. Gunakan .xlsx atau .csv dengan kolom Nama dan Nomor Pendaftaran.'); }
+  }
+
   async function create() {
     setBusy(true); setMsg(''); setFailed([]);
     try {
-      const creds = generateCredentials(parsePastedRows(text));
+      const creds = generateCredentials(parsePastedRows(text), DEFAULT_PW);
       const res = await createParticipants(creds);
-      const bad = new Set(res.failed.map((f) => f.participantNo));
-      const ok = creds.filter((c) => !bad.has(c.participantNo));
-      if (ok.length) downloadBlob(await exportAccountsXlsx(ok), 'akun-peserta.xlsx'); // password hanya tampil sekali
       setFailed(res.failed);
-      setMsg(`${res.created} akun dibuat. File Excel berisi username dan password sudah diunduh, simpan baik-baik.`);
+      setMsg(`${res.created} akun dibuat. Login memakai nomor pendaftaran, password: ${DEFAULT_PW}`);
       setText('');
       await load();
     } catch (e) {
@@ -45,7 +57,7 @@ export default function PesertaPage() {
   }
 
   async function doReset(p: ParticipantRow) {
-    const [c] = generateCredentials([{ fullName: p.full_name, participantNo: p.participant_no }]);
+    const [c] = generateCredentials([{ fullName: p.full_name, participantNo: p.participant_no }], DEFAULT_PW);
     try { await resetPassword(p.id, c.password); setShown({ username: p.participant_no, password: c.password }); }
     catch (e) { setMsg(e instanceof Error ? e.message : 'Gagal'); }
   }
@@ -100,6 +112,13 @@ export default function PesertaPage() {
 
         <div className="flex flex-col gap-3.5 rounded-xl border border-line bg-white p-5 lg:w-[380px] lg:shrink-0">
           <h2 className="text-base font-semibold leading-6 text-ink">Buat akun massal</h2>
+          <label className="flex cursor-pointer items-center justify-center rounded-[10px] bg-brand-600 px-5 py-3 text-sm font-medium leading-5 text-white hover:bg-brand-700">
+            Unggah Excel peserta
+            <input type="file" accept=".xlsx,.csv" className="hidden" onChange={onFile} />
+          </label>
+          <button type="button" className="text-left text-xs font-medium text-brand-600" onClick={async () => downloadBlob(await exportParticipantTemplateXlsx(), 'template-peserta.xlsx')}>
+            Unduh template Excel (kolom: Nama, Nomor Pendaftaran)
+          </button>
           <textarea
             value={text}
             onChange={(e) => setText(e.target.value)}
@@ -107,11 +126,11 @@ export default function PesertaPage() {
             className="h-[150px] w-full resize-none rounded-[10px] border border-line bg-subtle p-3.5 text-sm leading-5 text-ink outline-none placeholder:text-soft focus:border-brand-600"
           />
           <p className="text-xs font-medium leading-4 text-muted">
-            Satu peserta per baris: Nama, Nomor peserta. Username dan password acak dibuat otomatis.
+            Unggah Excel, atau tempel manual satu peserta per baris: Nama, Nomor pendaftaran.
           </p>
           <div className="flex items-start gap-2 rounded-[10px] bg-info-50 p-3">
             <Icon name="info-blue" size={16} />
-            <p className="flex-1 text-xs font-medium leading-4 text-info-600">Password hanya tampil sekali. Unduh Excel setelah akun dibuat.</p>
+            <p className="flex-1 text-xs font-medium leading-4 text-info-600">Username = nomor pendaftaran. Semua peserta memakai password awal <b>{DEFAULT_PW}</b>.</p>
           </div>
           <Button disabled={busy || !pending} onClick={create}>{busy ? 'Membuat…' : pending ? `Buat ${pending} akun` : 'Buat akun'}</Button>
         </div>

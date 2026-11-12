@@ -14,7 +14,8 @@ function randomPassword(len = 8): string {
 /** Nomor peserta menjadi bagian email, jadi dibatasi huruf kecil, angka, titik, strip, garis bawah. */
 export const PARTICIPANT_NO_RE = /^[a-z0-9._-]{3,40}$/;
 
-export function generateCredentials(rows: { fullName: string; participantNo: string }[]): ParticipantCredential[] {
+/** Bila `fixedPassword` diberikan, semua peserta memakai password itu (bukan acak). */
+export function generateCredentials(rows: { fullName: string; participantNo: string }[], fixedPassword?: string): ParticipantCredential[] {
   const seen = new Set<string>();
   const used = new Set<string>();
   return rows.map((r) => {
@@ -23,9 +24,11 @@ export function generateCredentials(rows: { fullName: string; participantNo: str
     if (!PARTICIPANT_NO_RE.test(no)) throw new Error(`NOMOR_TIDAK_VALID: ${r.participantNo}`);
     if (seen.has(no)) throw new Error(`NOMOR_DUPLIKAT: ${r.participantNo}`);
     seen.add(no);
-    let pw = randomPassword();
-    while (used.has(pw)) pw = randomPassword();
-    used.add(pw);
+    let pw = fixedPassword ?? randomPassword();
+    if (!fixedPassword) {
+      while (used.has(pw)) pw = randomPassword();
+      used.add(pw);
+    }
     return { fullName: r.fullName.trim(), participantNo: no, username: no, password: pw };
   });
 }

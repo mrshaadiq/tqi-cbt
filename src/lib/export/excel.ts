@@ -26,6 +26,16 @@ export async function exportAccountsXlsx(creds: ParticipantCredential[]): Promis
   return new Blob([await wb.xlsx.writeBuffer()], { type: XLSX });
 }
 
+export async function exportParticipantTemplateXlsx(): Promise<Blob> {
+  const wb = await newWorkbook();
+  const ws = wb.addWorksheet('Peserta');
+  ws.columns = [{ header: 'Nama', key: 'n', width: 32 }, { header: 'Nomor Pendaftaran', key: 'no', width: 22 }];
+  ws.getRow(1).font = { bold: true };
+  ws.addRow({ n: 'Ahmad Fauzi', no: '2026-0147' });
+  ws.addRow({ n: 'Siti Aisyah', no: '2026-0148' });
+  return new Blob([await wb.xlsx.writeBuffer()], { type: XLSX });
+}
+
 /** Urut: nilai turun, lalu nama. Kolom Ranking dihitung ulang (nilai sama = ranking sama). */
 export async function exportResultsXlsx(rows: ResultRow[]): Promise<Blob> {
   const sorted = [...rows].sort((a, b) => b.score - a.score || a.fullName.localeCompare(b.fullName));

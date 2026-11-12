@@ -52,7 +52,7 @@ export function rowsToDrafts(rows: string[][]): DraftQuestion[] {
   return out;
 }
 
-function cellText(v: unknown): string {
+export function cellText(v: unknown): string {
   if (v === null || v === undefined) return '';
   if (typeof v === 'object') {
     const o = v as { richText?: { text: string }[]; text?: unknown; result?: unknown };
