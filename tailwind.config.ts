@@ -10,7 +10,12 @@ const config: Config = {
         page: '#FBF7F4',
         ink: '#2A1B16',
         danger: { 50: '#FDECEC', 600: '#B91C1C' },
-        success: { 50: '#E8F5EC', 600: '#2E7D4F' },
+        warning: { 100: '#FEEBC8', 600: '#B45309' },
+        line: { DEFAULT: '#E8DDD6', strong: '#CFC0B7' },
+        subtle: '#F3ECE7',
+        muted: '#9E8D84',
+        soft: '#6E5C54',
+        success: { 50: '#E8F5EC', 100: '#DDF1E5', 600: '#2E7D4F' },
         info: { 50: '#E6EFFA', 600: '#2563A8' },
       },
       fontFamily: {
