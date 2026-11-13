@@ -1,10 +1,13 @@
 import { LABELS, emptyDraft, type DraftQuestion, type Label } from './types';
+import { splitAccepted } from './docx';
 
 const COL: Record<string, string[]> = {
   no: ['no', 'nomor'],
   stimulus: ['pengantar', 'stimulus', 'teks pengantar', 'bacaan'],
   body: ['soal', 'pertanyaan', 'teks soal'],
   key: ['kunci', 'jawaban', 'kunci jawaban'],
+  section: ['bagian', 'section', 'sesi'],
+  type: ['tipe', 'jenis', 'type'],
 };
 
 function findCol(header: string[], names: string[]): number {
@@ -20,6 +23,8 @@ export function rowsToDrafts(rows: string[][]): DraftQuestion[] {
     stimulus: findCol(header, COL.stimulus),
     body: findCol(header, COL.body),
     key: findCol(header, COL.key),
+    section: findCol(header, COL.section),
+    type: findCol(header, COL.type),
     opt: LABELS.map((l) => header.indexOf(l.toLowerCase())),
   };
   if (c.body < 0 || c.opt.some((i) => i < 0) && c.opt.filter((i) => i >= 0).length < 2 || c.key < 0) {
@@ -32,6 +37,7 @@ export function rowsToDrafts(rows: string[][]): DraftQuestion[] {
     const d = emptyDraft();
     d.body = get(c.body);
     d.stimulus = get(c.stimulus) || null;
+    d.section = get(c.section) || 'Umum';
     const no = Number(get(c.no));
     if (c.no >= 0 && Number.isFinite(no) && no > 0) d.sourceNo = no;
 
@@ -44,6 +50,15 @@ export function rowsToDrafts(rows: string[][]): DraftQuestion[] {
       remap.set(orig, label);
       d.options.push({ label, body: text });
     });
+    // tipe "isian", atau tipe kosong tanpa opsi = soal isian; kunci boleh beberapa dipisah |
+    const tipe = get(c.type).toLowerCase();
+    if (tipe.startsWith('isian') || (!tipe.startsWith('pg') && d.options.length === 0)) {
+      d.type = 'isian';
+      d.options = [];
+      d.accepted = splitAccepted(get(c.key));
+      out.push(d);
+      continue;
+    }
     const k = get(c.key).toUpperCase().replace(/[^A-E]/g, '');
     d.answer = k.length === 1 ? remap.get(k) ?? null : null;
     if (k.length > 1) d.keyCandidates = k.split('').map((x) => remap.get(x)).filter((x): x is Label => !!x);

@@ -1,4 +1,5 @@
 import { LABELS, emptyDraft, type DraftQuestion, type Label } from './types';
+import { SECTION_RE, splitAccepted } from './docx';
 
 const isLabel = (s: string): s is Label => (LABELS as string[]).includes(s);
 
@@ -10,8 +11,10 @@ const isLabel = (s: string): s is Label => (LABELS as string[]).includes(s);
 export function parseQuestionText(text: string): DraftQuestion[] {
   const drafts: DraftQuestion[] = [];
   const keyMap = new Map<number, Label>();
+  const keyTextMap = new Map<number, string>();
   let cur: DraftQuestion | null = null;
   let inKeyBlock = false;
+  let section = 'Umum';
 
   for (const raw of text.replace(/\r/g, '').split('\n')) {
     const line = raw.trim();
@@ -25,12 +28,23 @@ export function parseQuestionText(text: string): DraftQuestion[] {
       for (const m of line.matchAll(/(\d{1,3})\s*[.\-:)]*\s*([A-Ea-e])(?![A-Za-z])/g)) {
         keyMap.set(Number(m[1]), m[2].toUpperCase() as Label);
       }
+      const one = line.match(/^(\d{1,3})\s*[.\-:)]+\s*(.+)$/);
+      if (one) keyTextMap.set(Number(one[1]), one[2].trim());
       continue;
     }
 
-    const key = line.match(/^(?:kunci|jawaban)\s*[:=]\s*([A-Ea-e])\b/i);
+    const sec = line.match(SECTION_RE);
+    if (sec) {
+      section = sec[1].trim();
+      cur = null;
+      continue;
+    }
+
+    const key = line.match(/^(?:kunci|jawaban)\s*[:=]\s*(.+)$/i);
     if (key && cur) {
-      cur.answer = key[1].toUpperCase() as Label;
+      const v = key[1].trim();
+      if (cur.options.length && /^[A-Ea-e]$/.test(v)) cur.answer = v.toUpperCase() as Label;
+      else if (!cur.options.length) cur.accepted = splitAccepted(v);
       continue;
     }
 
@@ -45,7 +59,7 @@ export function parseQuestionText(text: string): DraftQuestion[] {
 
     const qm = line.match(/^(\d{1,3})\s*[.)]\s+(.*)$/);
     if (qm) {
-      cur = { ...emptyDraft(), body: qm[2].trim(), sourceNo: Number(qm[1]) };
+      cur = { ...emptyDraft(), section, body: qm[2].trim(), sourceNo: Number(qm[1]) };
       drafts.push(cur);
       continue;
     }
@@ -62,6 +76,14 @@ export function parseQuestionText(text: string): DraftQuestion[] {
   }
 
   for (const d of drafts) {
+    if (!d.options.length) {
+      // tanpa opsi = soal isian
+      d.type = 'isian';
+      if (!d.accepted?.length && d.sourceNo !== undefined && keyTextMap.has(d.sourceNo)) {
+        d.accepted = splitAccepted(keyTextMap.get(d.sourceNo));
+      }
+      continue;
+    }
     if (d.answer === null && d.sourceNo !== undefined && keyMap.has(d.sourceNo)) d.answer = keyMap.get(d.sourceNo)!;
   }
   return drafts;

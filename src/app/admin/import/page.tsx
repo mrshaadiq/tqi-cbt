@@ -96,7 +96,7 @@ export default function ImportPage() {
       <div className="flex items-start gap-2.5 rounded-xl bg-info-50 px-4 py-3">
         <Icon name="info-blue-18" size={18} />
         <p className="flex-1 text-sm font-medium leading-5 text-info-600">
-          Cara membaca file Word: nomor soal dan huruf opsi dari daftar bernomor Word, kunci jawaban dari opsi bertulisan merah, paragraf tanpa nomor sebagai teks pengantar. Rumus matematika Word tidak terbaca otomatis. Format lain: Excel/CSV dan PDF berisi teks (maks 10 MB, 200 soal).
+          Cara membaca file Word: nomor soal dan huruf opsi dari daftar bernomor Word, kunci jawaban dari opsi bertulisan merah, paragraf tanpa nomor sebagai teks pengantar. Judul bagian ditulis di baris sendiri, mis. &quot;Bagian: Matematika&quot;. Soal bernomor tanpa opsi dibaca sebagai soal isian, dengan kunci di baris &quot;Kunci: 36 | tiga puluh enam&quot;. Rumus matematika Word tidak terbaca otomatis. Format lain: Excel/CSV dan PDF berisi teks (maks 10 MB, 200 soal).
         </p>
       </div>
 
@@ -130,6 +130,8 @@ export default function ImportPage() {
             <div className="flex flex-wrap items-center gap-2.5">
               <span className="text-base font-semibold leading-6 text-ink">Soal {i + 1}</span>
               {hasErr ? d.errors.map((e) => <Badge key={e} tone="danger">{e}</Badge>) : <Badge tone="success">Valid</Badge>}
+              <Badge tone="neutral">{d.section || 'Umum'}</Badge>
+              {d.type === 'isian' && <Badge tone="info">Isian</Badge>}
               {!hasErr && d.stimulus && <Badge tone="brand">Teks pengantar terdeteksi</Badge>}
               {!hasErr && arabicOpts && <Badge tone="brand">{d.options.length} opsi, teks Arab</Badge>}
               <div className="flex-1" />
@@ -158,6 +160,12 @@ export default function ImportPage() {
                     </div>
                   );
                 })}
+                {d.type === 'isian' && (
+                  <div className="flex items-center gap-2.5 rounded-lg bg-success-100 px-3 py-2 text-sm leading-5 text-ink">
+                    <span className="font-medium text-success-600">Kunci isian:</span>
+                    <span dir="auto">{(d.accepted ?? []).filter(Boolean).join('  |  ') || '(kosong)'}</span>
+                  </div>
+                )}
                 {keyLabel && <p className="text-xs font-medium leading-4 text-muted">Kunci terbaca dari teks merah: opsi {keyLabel}</p>}
                 {d.notes.map((n) => <p key={n} className="text-xs font-medium leading-4 text-warning-600">ⓘ {n}</p>)}
                 {hasErr && (

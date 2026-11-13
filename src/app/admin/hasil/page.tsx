@@ -65,6 +65,7 @@ export default function HasilPage() {
           <Button onClick={async () => downloadBlob(await exportResultsXlsx(rows.map((r) => ({
             rank: r.rank, fullName: r.full_name, participantNo: r.participant_no, score: Number(r.score), correctCount: r.correct_count,
             passed: r.passed, eventCount: r.kejadian,
+            sections: (r.section_scores ?? []).map((s) => ({ name: s.section, score: Number(s.score) })),
           }))), 'hasil-tes.xlsx')}>Ekspor Excel</Button>
         </div>
       </div>
@@ -86,9 +87,9 @@ export default function HasilPage() {
           <span>#</span><span>PESERTA</span><span>NILAI (0-100)</span><span>BENAR / SALAH / KOSONG</span><span>KEJADIAN</span><span>STATUS</span><span>AKSI</span>
         </div>
         {rows.map((r) => {
-          const ans = answered[r.attempt_id] ?? r.correct_count;
+          const ans = r.terjawab ?? answered[r.attempt_id] ?? r.correct_count;
           const wrong = Math.max(0, ans - r.correct_count);
-          const empty = Math.max(0, total - ans);
+          const empty = Math.max(0, (r.total_soal || total) - ans);
           return (
             <div key={r.attempt_id} className={`${cols} flex flex-col items-start gap-2 border-b border-line px-4 py-3 last:border-b-0`}>
               <span className="text-sm leading-5 text-ink">{r.rank}</span>
@@ -96,7 +97,14 @@ export default function HasilPage() {
                 <span className="text-sm leading-5 text-ink">{r.full_name}</span>
                 <span className="text-xs leading-4 text-muted">{r.participant_no}</span>
               </div>
-              <span className="text-base font-semibold leading-6 text-ink">{Number(r.score).toFixed(0)}</span>
+              <div className="flex flex-col">
+                <span className="text-base font-semibold leading-6 text-ink">{Number(r.score).toFixed(0)}</span>
+                {(r.section_scores?.length ?? 0) > 1 && (
+                  <span className="text-xs leading-4 text-muted" title={r.section_scores!.map((s) => `${s.section}: ${Number(s.score).toFixed(0)}`).join('\n')}>
+                    {r.section_scores!.map((s) => Number(s.score).toFixed(0)).join(' · ')}
+                  </span>
+                )}
+              </div>
               <span className="whitespace-pre text-sm leading-5 text-ink">{`${r.correct_count}  /  ${wrong}  /  ${empty}`}</span>
               <div>
                 {r.kejadian === 0 ? <span className="text-sm leading-5 text-muted">0</span> : <Badge tone={r.kejadian >= 5 ? 'danger' : 'warning'}>{r.kejadian}</Badge>}
@@ -125,7 +133,7 @@ export default function HasilPage() {
 
       <div className="flex items-center gap-2">
         <Icon name="info-muted" size={16} />
-        <p className="text-xs font-medium leading-4 text-muted">Satu nilai total dari {total} soal. Peserta tidak melihat nilai di website. Hasil hanya untuk panitia dan diekspor ke Excel.</p>
+        <p className="text-xs font-medium leading-4 text-muted">Nilai total dari {total} soal; angka kecil di bawah nilai adalah nilai per bagian. Peserta tidak melihat nilai di website. Hasil hanya untuk panitia dan diekspor ke Excel.</p>
       </div>
     </>
   );

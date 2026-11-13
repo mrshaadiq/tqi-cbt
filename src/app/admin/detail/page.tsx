@@ -2,7 +2,7 @@
 import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { attemptDetail, setPassed, signedSnapshotUrls, type AttemptDetail } from '@/lib/adminApi';
+import { attemptDetail, setManualCorrect, setPassed, signedSnapshotUrls, type AttemptDetail } from '@/lib/adminApi';
 import { supabase } from '@/lib/supabase';
 import RtlText from '@/components/RtlText';
 import { Badge, Button, Icon, Spinner } from '@/components/ui';
@@ -51,6 +51,11 @@ function Detail() {
     try { await setPassed(id!, v); await loadPass(); } catch (e) { setMsg(e instanceof Error ? e.message : 'Gagal'); }
   }
 
+  async function correct(questionId: string, v: boolean | null) {
+    try { await setManualCorrect(id!, questionId, v); setD(await attemptDetail(id!)); }
+    catch (e) { setMsg(e instanceof Error ? e.message : 'Gagal mengoreksi'); }
+  }
+
   async function purge() {
     if (!confirm('Hapus semua foto peserta ini? Tidak bisa dibatalkan.')) return;
     const { data } = await supabase.from('snapshots').select('path').eq('attempt_id', id!);
@@ -90,6 +95,16 @@ function Detail() {
               <Badge tone="danger">{salah} salah</Badge>
               <Badge tone="neutral">{kosong} kosong</Badge>
             </div>
+            {(d.attempt.section_scores?.length ?? 0) > 1 && (
+              <div className="flex flex-col gap-1.5 rounded-[10px] bg-subtle p-3 text-sm leading-5">
+                <span className="text-xs font-medium leading-4 text-muted">NILAI PER BAGIAN</span>
+                {d.attempt.section_scores!.map((s) => (
+                  <div key={s.section} className="flex"><span className="text-ink">{s.section}</span><div className="flex-1" />
+                    <span className="tabular-nums text-ink">{Number(s.score).toFixed(0)} <span className="text-muted">({s.correct}/{s.total})</span></span>
+                  </div>
+                ))}
+              </div>
+            )}
             <div className="flex flex-col gap-1.5 text-sm leading-5">
               {[
                 ['Mulai', `${hhmm(d.attempt.started_at)} WIB`],
@@ -161,17 +176,30 @@ function Detail() {
       <div ref={answers} className="flex flex-col gap-3 rounded-xl border border-line bg-white p-5">
         <h2 className="text-base font-semibold leading-6 text-ink">Jawaban per soal</h2>
         <ul className="divide-y divide-line">
-          {d.rows.map((r) => (
-            <li key={r.position} className="flex items-start gap-3 py-2.5">
-              <span className="w-8 shrink-0 text-sm font-semibold text-ink">{r.position}</span>
-              <div className="min-w-0 flex-1 text-sm leading-5">
-                <RtlText text={r.question} className="mb-1 font-medium text-ink" />
-                <div className="flex flex-wrap gap-x-4 gap-y-1 text-soft">
-                  <span>Dipilih: {r.chosen ? <RtlText text={r.chosen} className="inline-block text-ink" /> : <i className="text-muted">kosong</i>}</span>
-                  {!r.is_correct && <span className="text-success-600">Kunci: <RtlText text={r.correct ?? '-'} className="inline-block" /></span>}
+          {d.rows.map((r, i) => (
+            <li key={r.position} className="flex flex-col">
+              {(i === 0 || d.rows[i - 1].section !== r.section) && new Set(d.rows.map((x) => x.section)).size > 1 && (
+                <span className="pb-1 pt-3 text-xs font-semibold uppercase leading-4 text-muted">{r.section}</span>
+              )}
+              <div className="flex items-start gap-3 py-2.5">
+                <span className="w-8 shrink-0 text-sm font-semibold text-ink">{r.position}</span>
+                <div className="min-w-0 flex-1 text-sm leading-5">
+                  <RtlText text={r.question} className="mb-1 font-medium text-ink" />
+                  <div className="flex flex-wrap gap-x-4 gap-y-1 text-soft">
+                    <span>{r.type === 'isian' ? 'Jawaban' : 'Dipilih'}: {r.chosen ? <RtlText text={r.chosen} className="inline-block text-ink" /> : <i className="text-muted">kosong</i>}</span>
+                    {(!r.is_correct || r.type === 'isian') && <span className="text-success-600">Kunci: <RtlText text={r.correct ?? '-'} className="inline-block" /></span>}
+                  </div>
+                  {r.type === 'isian' && d.attempt.status !== 'in_progress' && (
+                    <div className="mt-1.5 flex flex-wrap items-center gap-3 text-xs font-medium">
+                      {r.manual_correct !== null && <span className="text-muted">Dikoreksi manual</span>}
+                      {r.manual_correct !== true && <button className="text-success-600" onClick={() => correct(r.question_id, true)}>Tandai benar</button>}
+                      {r.manual_correct !== false && <button className="text-danger-600" onClick={() => correct(r.question_id, false)}>Tandai salah</button>}
+                      {r.manual_correct !== null && <button className="text-soft" onClick={() => correct(r.question_id, null)}>Kembalikan otomatis</button>}
+                    </div>
+                  )}
                 </div>
+                <Badge tone={r.is_correct ? 'success' : r.chosen ? 'danger' : 'neutral'}>{r.is_correct ? 'Benar' : r.chosen ? 'Salah' : 'Kosong'}</Badge>
               </div>
-              <Badge tone={r.is_correct ? 'success' : r.chosen ? 'danger' : 'neutral'}>{r.is_correct ? 'Benar' : r.chosen ? 'Salah' : 'Kosong'}</Badge>
             </li>
           ))}
         </ul>

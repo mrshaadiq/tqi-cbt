@@ -10,7 +10,7 @@ import { isMostlyArabic } from '@/lib/text';
 import { questionImageUrl } from '@/lib/supabase';
 import RtlText from '@/components/RtlText';
 import { Button, Icon, Logo, Modal } from '@/components/ui';
-import QuestionNav, { type AnswerMap } from './QuestionNav';
+import QuestionNav, { groupSections, isAnswered, type AnswerMap } from './QuestionNav';
 
 type Props = {
   state: AttemptState;
@@ -30,7 +30,7 @@ export default function ExamRunner({ state, token, profile, clock, streamRef, on
 
   const [idx, setIdx] = useState(0);
   const [answers, setAnswers] = useState<AnswerMap>(() =>
-    Object.fromEntries(state.answers.map((a) => [a.question_id, { optionId: a.option_id, flagged: a.flagged }])),
+    Object.fromEntries(state.answers.map((a) => [a.question_id, { optionId: a.option_id, text: a.answer_text, flagged: a.flagged }])),
   );
   const [remaining, setRemaining] = useState(() => Math.max(0, Math.ceil((Date.parse(state.ends_at) - clock.now()) / 1000)));
   const [sheet, setSheet] = useState(false);
@@ -43,6 +43,8 @@ export default function ExamRunner({ state, token, profile, clock, streamRef, on
   const [camWarn, setCamWarn] = useState(false);
 
   const finishing = useRef(false);
+  const typing = useRef(new Map<string, ReturnType<typeof setTimeout>>());
+  const flushTypingRef = useRef<() => void>(() => {});
   const queueRef = useRef<AnswerQueue | null>(null);
   const cb = useRef({ onFinished, onSessionLost });
   cb.current = { onFinished, onSessionLost };
@@ -52,6 +54,7 @@ export default function ExamRunner({ state, token, profile, clock, streamRef, on
     finishing.current = true;
     setSubmitting(true);
     setSubmitError('');
+    flushTypingRef.current();
     const q = queueRef.current!;
     for (;;) {
       try {
@@ -175,15 +178,40 @@ export default function ExamRunner({ state, token, profile, clock, streamRef, on
     }
   }
 
-  function save(qid: string, optionId: string | null, flagged: boolean) {
-    setAnswers((a) => ({ ...a, [qid]: { optionId, flagged } }));
-    queueRef.current!.enqueue({ attemptId, questionId: qid, optionId, flagged, token });
+  function save(qid: string, optionId: string | null, flagged: boolean, text: string | null = answers[qid]?.text ?? null) {
+    const t = typing.current.get(qid);
+    if (t) { clearTimeout(t); typing.current.delete(qid); }
+    setAnswers((a) => ({ ...a, [qid]: { optionId, text, flagged } }));
+    queueRef.current!.enqueue({ attemptId, questionId: qid, optionId, answerText: text, flagged, token });
     setPending(queueRef.current!.pending());
   }
 
+  // isian: tampil langsung, dikirim setelah berhenti mengetik 800 ms
+  const latest = useRef(answers);
+  latest.current = answers;
+  function typeAnswer(qid: string, text: string) {
+    setAnswers((a) => ({ ...a, [qid]: { optionId: null, text, flagged: a[qid]?.flagged ?? false } }));
+    const t = typing.current.get(qid);
+    if (t) clearTimeout(t);
+    typing.current.set(qid, setTimeout(() => {
+      typing.current.delete(qid);
+      const a = latest.current[qid];
+      queueRef.current!.enqueue({ attemptId, questionId: qid, optionId: null, answerText: a?.text ?? '', flagged: a?.flagged ?? false, token });
+      setPending(queueRef.current!.pending());
+    }, 800));
+  }
+  flushTypingRef.current = () => {
+    for (const [qid, t] of typing.current) {
+      clearTimeout(t);
+      const a = latest.current[qid];
+      queueRef.current!.enqueue({ attemptId, questionId: qid, optionId: null, answerText: a?.text ?? '', flagged: a?.flagged ?? false, token });
+    }
+    typing.current.clear();
+  };
+
   const q = questions[idx];
   const cur = answers[q.id];
-  const answeredCount = questions.filter((x) => answers[x.id]?.optionId).length;
+  const answeredCount = questions.filter((x) => isAnswered(answers[x.id])).length;
   const flaggedCount = questions.filter((x) => answers[x.id]?.flagged).length;
   const unanswered = questions.length - answeredCount;
   const img = questionImageUrl(q.image_path);
@@ -191,6 +219,8 @@ export default function ExamRunner({ state, token, profile, clock, streamRef, on
   const camOn = !camWarn || !!profile.camera_excluded;
   const goTo = (i: number) => { setIdx(i); setSheet(false); };
   const last = idx === questions.length - 1;
+  const sections = groupSections(questions);
+  const secIdx = sections.findIndex((s) => idx >= s.start && idx < s.start + s.count);
   const hms = (() => {
     const t = Math.max(0, remaining);
     const h = Math.floor(t / 3600), m = Math.floor((t % 3600) / 60), s = t % 60;
@@ -250,11 +280,21 @@ export default function ExamRunner({ state, token, profile, clock, streamRef, on
 
       <div className="flex min-h-0 flex-1 items-stretch">
         <main className="flex min-w-0 flex-1 flex-col gap-3 overflow-y-auto p-4 md:gap-5 md:p-8">
+          {sections.length > 1 && (
+            <div className="flex gap-2 overflow-x-auto" role="tablist" aria-label="Bagian ujian">
+              {sections.map((s, i) => (
+                <button key={s.start} role="tab" aria-selected={i === secIdx} onClick={() => setIdx(s.start)}
+                  className={`whitespace-nowrap rounded-full border px-3.5 py-2 text-sm font-medium leading-5 ${i === secIdx ? 'border-brand-600 bg-brand-600 text-white' : 'border-line bg-white text-soft'}`}>
+                  {s.name}
+                </button>
+              ))}
+            </div>
+          )}
           <div className="flex items-center gap-2 md:gap-3">
             <h1 className="text-base font-semibold leading-6 text-ink md:text-xl md:leading-7">Soal {idx + 1} dari {questions.length}</h1>
             <div className="flex-1" />
             <button
-              onClick={() => save(q.id, cur?.optionId ?? null, !cur?.flagged)}
+              onClick={() => save(q.id, cur?.optionId ?? null, !cur?.flagged, cur?.text ?? null)}
               aria-pressed={!!cur?.flagged}
               className={`rounded-[10px] px-5 py-3 text-sm font-medium leading-5 ${cur?.flagged ? 'border border-info-600 bg-info-600 text-white' : 'border border-line-strong bg-white text-brand-600'}`}
             >
@@ -273,6 +313,20 @@ export default function ExamRunner({ state, token, profile, clock, streamRef, on
             {img && <img src={img} alt="" className="max-h-72 self-start rounded-lg" />}
             <RtlText text={q.body} className="text-base font-semibold leading-6 text-ink md:text-xl md:leading-7" />
 
+            {q.type === 'isian' ? (
+              <label className="flex flex-col gap-1.5">
+                <span className="text-xs font-medium leading-4 text-muted">Ketik jawaban Anda</span>
+                <input
+                  dir="auto"
+                  maxLength={500}
+                  autoComplete="off"
+                  value={cur?.text ?? ''}
+                  onChange={(e) => typeAnswer(q.id, e.target.value)}
+                  onBlur={() => flushTypingRef.current()}
+                  className="w-full rounded-xl border border-line-strong bg-white p-3 text-base leading-6 text-ink outline-none focus:border-2 focus:border-brand-600 md:p-4"
+                />
+              </label>
+            ) : (
             <div className="flex flex-col gap-2 md:gap-3" role="radiogroup">
               {q.options.map((o, i) => {
                 const selected = cur?.optionId === o.id;
@@ -284,7 +338,7 @@ export default function ExamRunner({ state, token, profile, clock, streamRef, on
                     role="radio"
                     aria-checked={selected}
                     dir={rtl ? 'rtl' : 'ltr'}
-                    onClick={() => save(q.id, o.id, cur?.flagged ?? false)}
+                    onClick={() => save(q.id, o.id, cur?.flagged ?? false, null)}
                     className={`flex w-full items-center gap-3 rounded-xl p-3 text-left transition md:gap-3.5 md:p-4 ${selected ? 'border-2 border-brand-600 bg-brand-50' : 'border border-line bg-white hover:bg-brand-50/50'}`}
                   >
                     <span className={`flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-full text-sm font-medium leading-5 md:h-[34px] md:w-[34px] ${selected ? 'bg-brand-600 text-white' : 'bg-subtle text-soft'}`}>{LETTERS[i]}</span>
@@ -304,6 +358,7 @@ export default function ExamRunner({ state, token, profile, clock, streamRef, on
                 );
               })}
             </div>
+            )}
           </div>
 
           <div className="hidden items-center gap-3 md:flex">

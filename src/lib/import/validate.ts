@@ -14,6 +14,10 @@ export function validateDrafts(drafts: DraftQuestion[]): DraftQuestion[] {
     if (d.body.includes(RUMUS) || (d.stimulus ?? '').includes(RUMUS)) {
       errors.push('soal masih berisi [RUMUS] (rumus tidak terbaca), ganti dengan teks rumus');
     }
+    if (d.type === 'isian') {
+      if (!(d.accepted ?? []).some((x) => x.trim())) errors.push('kunci isian kosong');
+      return { ...d, errors };
+    }
     if (d.options.length < 2) errors.push('opsi kurang dari dua');
     if (d.options.length > 5) errors.push('opsi lebih dari lima');
 

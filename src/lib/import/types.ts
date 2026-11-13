@@ -3,7 +3,15 @@ export const LABELS: Label[] = ['A', 'B', 'C', 'D', 'E'];
 
 export type DraftOption = { label: Label; body: string; image?: Blob };
 
+export type QuestionType = 'pg' | 'isian';
+
 export type DraftQuestion = {
+  /** nama bagian/section, default 'Umum' */
+  section?: string;
+  /** 'pg' (pilihan ganda) atau 'isian' (jawaban singkat diketik) */
+  type?: QuestionType;
+  /** kunci soal isian: semua jawaban yang diterima */
+  accepted?: string[];
   stimulus: string | null;
   body: string;
   options: DraftOption[];
@@ -20,5 +28,5 @@ export type DraftQuestion = {
 export const RUMUS = '[RUMUS]';
 
 export function emptyDraft(): DraftQuestion {
-  return { stimulus: null, body: '', options: [], answer: null, errors: [], notes: [] };
+  return { section: 'Umum', type: 'pg', stimulus: null, body: '', options: [], answer: null, errors: [], notes: [] };
 }

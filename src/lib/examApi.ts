@@ -8,13 +8,13 @@ export type Attempt = {
 };
 export type StateOption = { id: string; label: string; body: string; image_path: string | null };
 export type StateQuestion = {
-  id: string; position: number; stimulus: string | null; body: string; image_path: string | null; options: StateOption[];
+  id: string; position: number; section: string; type: 'pg' | 'isian'; stimulus: string | null; body: string; image_path: string | null; options: StateOption[];
 };
 export type AttemptState = {
   attempt_id: string; server_now: string; started_at: string; ends_at: string;
   status: 'in_progress' | 'submitted' | 'expired';
   questions: StateQuestion[];
-  answers: { question_id: string; option_id: string | null; flagged: boolean }[];
+  answers: { question_id: string; option_id: string | null; answer_text: string | null; flagged: boolean }[];
   snapshot_slots: number[];
 };
 
@@ -45,7 +45,7 @@ export const fetchState = (attemptId: string, token: string) =>
 export const sendAnswer = (p: AnswerPayload) =>
   rpc<void>('save_answer', {
     p_attempt_id: p.attemptId, p_question_id: p.questionId, p_option_id: p.optionId,
-    p_flagged: p.flagged, p_client_seq: p.clientSeq, p_token: p.token,
+    p_flagged: p.flagged, p_client_seq: p.clientSeq, p_token: p.token, p_answer_text: p.answerText ?? null,
   });
 
 export const submit = (attemptId: string, token: string) =>

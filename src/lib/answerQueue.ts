@@ -2,6 +2,7 @@ export type AnswerPayload = {
   attemptId: string;
   questionId: string;
   optionId: string | null;
+  answerText?: string | null;
   flagged: boolean;
   clientSeq: number;
   token: string;

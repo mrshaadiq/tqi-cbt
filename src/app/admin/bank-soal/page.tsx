@@ -10,7 +10,7 @@ import QuestionEditor from '@/components/QuestionEditor';
 import RtlText from '@/components/RtlText';
 import { Badge, Button, Icon, Spinner } from '@/components/ui';
 
-type Filter = 'semua' | 'arab' | 'pengantar' | 'gambar' | 'nonaktif' | 'bermasalah';
+type Filter = 'semua' | 'isian' | 'arab' | 'pengantar' | 'gambar' | 'nonaktif' | 'bermasalah';
 const PAGE = 8;
 const cols = 'md:grid md:grid-cols-[50px_minmax(0,1fr)_60px_60px_130px_230px] md:items-center md:gap-3';
 
@@ -34,8 +34,9 @@ export default function BankSoalPage() {
     if (filter === 'pengantar' && !q.stimulus) return false;
     if (filter === 'gambar' && !q.image_path && !q.options.some((o) => o.image_path)) return false;
     if (filter === 'nonaktif' && q.is_active) return false;
+    if (filter === 'isian' && q.type !== 'isian') return false;
     if (filter === 'bermasalah' && !isProblematic(q)) return false;
-    return !search || (q.body + ' ' + (q.stimulus ?? '')).toLowerCase().includes(search.toLowerCase());
+    return !search || (q.section + ' ' + q.body + ' ' + (q.stimulus ?? '')).toLowerCase().includes(search.toLowerCase());
   }), [rows, filter, search]);
 
   if (!rows) return msg ? <p className="text-danger-600">{msg}</p> : <Spinner />;
@@ -46,6 +47,7 @@ export default function BankSoalPage() {
   const problematic = rows.filter(isProblematic).length;
   const chips: { id: Filter; label: string }[] = [
     { id: 'semua', label: `Semua (${rows.length})` },
+    { id: 'isian', label: `Isian (${rows.filter((r) => r.type === 'isian').length})` },
     { id: 'arab', label: `Teks Arab (${rows.filter(hasArabic).length})` },
     { id: 'pengantar', label: 'Ada teks pengantar' },
     { id: 'gambar', label: 'Ada gambar' },
@@ -89,7 +91,12 @@ export default function BankSoalPage() {
       <div className="flex flex-col gap-3 md:flex-row md:items-center">
         <div className="flex flex-col gap-1">
           <h1 className="text-2xl font-bold leading-8 text-ink">Bank Soal</h1>
-          <p className="whitespace-pre text-sm leading-5 text-soft">{rows.filter((r) => r.is_active).length} soal pilihan ganda{'  ·  '}Tes Kemampuan Dasar Akademik</p>
+          <p className="whitespace-pre text-sm leading-5 text-soft">{(() => {
+            const act = rows.filter((r) => r.is_active);
+            const isian = act.filter((r) => r.type === 'isian').length;
+            const secs = new Set(act.map((r) => r.section)).size;
+            return `${act.length} soal aktif (${act.length - isian} pilihan ganda, ${isian} isian)  ·  ${secs} bagian`;
+          })()}</p>
         </div>
         <div className="flex-1" />
         <div className="flex gap-3">
@@ -137,9 +144,13 @@ export default function BankSoalPage() {
             <div key={q.id} className={`border-b border-line last:border-b-0 ${q.is_active ? '' : 'opacity-70'}`}>
               <div className={`${cols} flex flex-col items-start gap-2 px-4 py-3`}>
                 <span className="text-sm leading-5 text-ink">{q.position}</span>
-                <p dir="auto" className="min-w-0 text-sm leading-5 text-ink md:truncate md:pr-2">{text}</p>
-                <span className="text-sm leading-5 text-ink">{q.options.length || '-'}</span>
-                <span className="text-sm leading-5 text-ink">{key?.label ?? '-'}</span>
+                <p dir="auto" className="min-w-0 text-sm leading-5 text-ink md:truncate md:pr-2">
+                  <span className="mr-1.5 rounded bg-subtle px-1.5 py-0.5 text-xs font-medium text-soft">{q.section}</span>{text}
+                </p>
+                <span className="text-sm leading-5 text-ink">{q.type === 'isian' ? 'Isian' : q.options.length || '-'}</span>
+                <span className="truncate text-sm leading-5 text-ink" title={q.answer_keys?.accepted?.join(' | ')}>
+                  {q.type === 'isian' ? q.answer_keys?.accepted?.[0] ?? '-' : key?.label ?? '-'}
+                </span>
                 <div>{label(q)}</div>
                 <div className="flex gap-3.5 text-sm font-medium leading-5">
                   <button className="text-brand-600" onClick={() => { setEditId(editId === q.id ? null : q.id); setDraft(rowToDraft(q)); }}>{editId === q.id ? 'Tutup' : 'Edit'}</button>

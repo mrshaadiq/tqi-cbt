@@ -77,6 +77,11 @@ function mimeOf(name: string): string {
   return 'application/octet-stream';
 }
 
+/** Baris judul bagian, mis. "Section: Matematika", "Bagian 2: Bahasa Arab", "## Matematika". */
+export const SECTION_RE = /^(?:#{1,3}\s*|(?:section|bagian|sesi)\s*\d*\s*[:.\-–]\s*)(.+)$/i;
+export const KEY_RE = /^(?:kunci|jawaban)\s*[:=]\s*(.+)$/i;
+export const splitAccepted = (s: string | null | undefined) => (s ?? '').split('|').map((x) => x.trim()).filter(Boolean);
+
 export async function parseDocx(file: File | Blob): Promise<DraftQuestion[]> {
   return parseDocxBuffer(await file.arrayBuffer());
 }
@@ -159,13 +164,18 @@ export async function parseDocxBuffer(buf: ArrayBuffer | Uint8Array): Promise<Dr
     (a, b) => b[1].blocks - a[1].blocks || b[1].count - a[1].count || a[1].first - b[1].first,
   )[0][0];
 
-  type Raw = { stimulus: Para[]; qText: Para[]; options: Para[] };
+  type Raw = { section: string; stimulus: Para[]; qText: Para[]; options: Para[]; keyLine: string | null };
   const raws: Raw[] = [];
   let cur: Raw | null = null;
   let pending: Para[] = [];
+  let section = 'Umum';
   for (const p of paras) {
+    const sec = p.numId === null ? p.text.trim().match(SECTION_RE) : null;
+    if (sec) { section = sec[1].trim(); pending = []; continue; }
+    const key = p.numId === null ? p.text.trim().match(KEY_RE) : null;
+    if (key && cur) { cur.keyLine = key[1].trim(); continue; }
     if (p.numId === qNum) {
-      cur = { stimulus: pending, qText: [p], options: [] };
+      cur = { section, stimulus: pending, qText: [p], options: [], keyLine: null };
       raws.push(cur);
       pending = [];
     } else if (p.numId !== null) {
@@ -199,11 +209,23 @@ export async function parseDocxBuffer(buf: ArrayBuffer | Uint8Array): Promise<Dr
       .slice(0, 5)
       .map((p, i) => (p.red ? LABELS[i] : null))
       .filter((x): x is (typeof LABELS)[number] => x !== null);
+    if (!raw.options.length) {
+      // tanpa opsi = soal isian; kunci dari baris "Kunci: ..." (beberapa jawaban dipisah |)
+      const q: DraftQuestion = {
+        section: raw.section, type: 'isian', stimulus, body: joined(raw.qText), options: [], answer: null,
+        accepted: splitAccepted(raw.keyLine), errors: [], notes,
+      };
+      if (imgs[0]) q.image = imgs[0];
+      return q;
+    }
+    const keyLetter = raw.keyLine?.toUpperCase().match(/^[A-E]$/)?.[0] as (typeof LABELS)[number] | undefined;
     const q: DraftQuestion = {
+      section: raw.section,
+      type: 'pg',
       stimulus,
       body: joined(raw.qText),
       options,
-      answer: reds.length === 1 ? reds[0] : null,
+      answer: reds.length === 1 ? reds[0] : reds.length === 0 && keyLetter ? keyLetter : null,
       keyCandidates: reds,
       errors: [],
       notes,

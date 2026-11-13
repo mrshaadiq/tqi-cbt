@@ -183,5 +183,47 @@ await db.query(`select admin_update_question($1, $2::jsonb)`, [qid, JSON.stringi
 const after = (await q(`select (select count(*) from options where question_id=$1)::int n, (select o.label from answer_keys k join options o on o.id=k.option_id where k.question_id=$1) k`, [qid]))[0];
 check('update soal: 3 opsi, kunci C', after.n === 3 && after.k === 'C', JSON.stringify(after));
 
+// --- section + soal isian ---
+await db.query(`select admin_clear_bank()`);
+await db.query(`update exams set opens_at = now() - interval '1 hour', closes_at = now() + interval '1 hour'`);
+const secPayload = [
+  { section: 'Matematika', type: 'isian', body: '2 + 2 = ...', accepted: ['4', 'empat'] },
+  { section: 'Bahasa', type: 'pg', body: 'PG bahasa', answer: 'A', options: [{ label: 'A', body: 'benar' }, { label: 'B', body: 'salah' }] },
+  { section: 'Matematika', type: 'pg', body: 'PG mtk', answer: 'B', options: [{ label: 'A', body: 'x' }, { label: 'B', body: 'y' }] },
+  { section: 'Bahasa', type: 'isian', body: 'Ibu kota?', accepted: ['Jakarta'] },
+];
+check('simpan 4 soal campuran', (await q(`select admin_save_questions($1::jsonb) n`, [JSON.stringify(secPayload)]))[0].n === 4);
+await throwsMsg('isian tanpa kunci ditolak', `select admin_save_questions('[{"type":"isian","body":"x","accepted":[]}]'::jsonb)`, 'belum punya kunci');
+await as(P1);
+const ts = (await q(`select claim_session() t`))[0].t;
+const as1 = (await q(`select * from start_attempt($1, $2)`, [examId, ts]))[0];
+const sst = (await q(`select get_attempt_state($1,$2) s`, [as1.id, ts]))[0].s;
+const secs = sst.questions.map((x) => x.section);
+check('section berurutan: Matematika dulu lalu Bahasa', secs.join(',') === 'Matematika,Matematika,Bahasa,Bahasa', secs.join(','));
+const qb = Object.fromEntries(sst.questions.map((x) => [x.body, x]));
+check('soal isian tanpa opsi, bertipe isian', qb['2 + 2 = ...'].type === 'isian' && qb['2 + 2 = ...'].options.length === 0);
+await db.query(`select save_answer($1,$2,null,false,1,$3,$4)`, [as1.id, qb['2 + 2 = ...'].id, ts, '  Empat. ']);
+await db.query(`select save_answer($1,$2,null,false,2,$3,$4)`, [as1.id, qb['Ibu kota?'].id, ts, 'Bandung']);
+await db.query(`select save_answer($1,$2,$3,false,3,$4)`, [as1.id, qb['PG bahasa'].id, qb['PG bahasa'].options.find((o) => o.body === 'benar').id, ts]);
+const sst2 = (await q(`select get_attempt_state($1,$2) s`, [as1.id, ts]))[0].s;
+check('jawaban isian tersimpan', sst2.answers.some((a) => a.answer_text === '  Empat. '));
+await db.query(`select submit_attempt($1,$2)`, [as1.id, ts]);
+await as(A);
+const g1 = (await q(`select score, correct_count, section_scores from attempts where id=$1`, [as1.id]))[0];
+check('isian dinormalisasi: 2 benar dari 4 = 50', Number(g1.score) === 50 && g1.correct_count === 2, JSON.stringify(g1));
+const ss = g1.section_scores;
+check('nilai per section', ss.length === 2 && ss[0].section === 'Matematika' && ss[0].correct === 1 && ss[1].correct === 1, JSON.stringify(ss));
+await db.query(`select admin_set_manual_correct($1,$2,true)`, [as1.id, qb['Ibu kota?'].id]);
+check('koreksi manual menaikkan nilai ke 75', Number((await q(`select score from attempts where id=$1`, [as1.id]))[0].score) === 75);
+const det = (await q(`select admin_attempt_detail($1) d`, [as1.id]))[0].d;
+const rIsian = det.rows.find((r) => r.question === 'Ibu kota?');
+check('detail isian: jawaban, kunci, manual', rIsian.chosen === 'Bandung' && rIsian.correct === 'Jakarta' && rIsian.manual_correct === true && rIsian.is_correct === true);
+await db.query(`select admin_set_manual_correct($1,$2,null)`, [as1.id, qb['Ibu kota?'].id]);
+check('batal koreksi manual: kembali 50', Number((await q(`select score from attempts where id=$1`, [as1.id]))[0].score) === 50);
+const res = (await q(`select terjawab, total_soal, section_scores from results where attempt_id=$1`, [as1.id]))[0];
+check('results memuat terjawab dan section', res.terjawab === 3 && res.total_soal === 4 && res.section_scores.length === 2, JSON.stringify(res));
+await as(P1);
+await throwsMsg('peserta tidak boleh koreksi manual', `select admin_set_manual_correct('${as1.id}','${qb['Ibu kota?'].id}',true)`, 'forbidden');
+
 console.log(`\n${pass} lulus, ${fail} gagal`);
 process.exit(fail ? 1 : 0);

@@ -28,8 +28,29 @@ export default function QuestionEditor({ draft, onChange }: { draft: DraftQuesti
     set({ options: rest, answer, keyCandidates: undefined });
   }
 
+  const isian = draft.type === 'isian';
+
   return (
     <div className="space-y-3">
+      <div className="flex flex-col gap-3 md:flex-row">
+        <label className="block flex-1">
+          <span className="mb-1 block text-xs font-semibold text-stone-500">Bagian / section</span>
+          <input dir="auto" className={inputCls} value={draft.section ?? 'Umum'} onChange={(e) => set({ section: e.target.value })} />
+        </label>
+        <label className="block md:w-56">
+          <span className="mb-1 block text-xs font-semibold text-stone-500">Jenis soal</span>
+          <select
+            className={inputCls}
+            value={isian ? 'isian' : 'pg'}
+            onChange={(e) => set(e.target.value === 'isian'
+              ? { type: 'isian', accepted: draft.accepted ?? [] }
+              : { type: 'pg', options: draft.options.length ? draft.options : LABELS.slice(0, 4).map((l) => ({ label: l, body: '' })) })}
+          >
+            <option value="pg">Pilihan ganda</option>
+            <option value="isian">Isian singkat</option>
+          </select>
+        </label>
+      </div>
       <label className="block">
         <span className="mb-1 block text-xs font-semibold text-stone-500">Teks pengantar (opsional)</span>
         <textarea dir="auto" rows={2} className={inputCls} value={draft.stimulus ?? ''} onChange={(e) => set({ stimulus: e.target.value || null })} />
@@ -38,6 +59,20 @@ export default function QuestionEditor({ draft, onChange }: { draft: DraftQuesti
         <span className="mb-1 block text-xs font-semibold text-stone-500">Pertanyaan</span>
         <textarea dir="auto" rows={2} className={inputCls} value={draft.body} onChange={(e) => set({ body: e.target.value })} />
       </label>
+      {isian ? (
+        <label className="block">
+          <span className="mb-1 block text-xs font-semibold text-stone-500">
+            Kunci jawaban (pisahkan dengan | bila ada beberapa jawaban yang diterima; huruf besar/kecil, spasi, dan tanda baca diabaikan)
+          </span>
+          <input
+            dir="auto"
+            className={inputCls}
+            value={(draft.accepted ?? []).join(' | ')}
+            onChange={(e) => set({ accepted: e.target.value.split('|').map((x) => x.trim()) })}
+            placeholder="contoh: 36 | tiga puluh enam"
+          />
+        </label>
+      ) : (
       <div className="space-y-2">
         <span className="block text-xs font-semibold text-stone-500">Opsi (pilih lingkaran untuk menandai kunci)</span>
         {draft.options.map((o, i) => (
@@ -53,6 +88,7 @@ export default function QuestionEditor({ draft, onChange }: { draft: DraftQuesti
           <button type="button" onClick={addOption} className="text-sm font-semibold text-brand-700">+ Tambah opsi</button>
         )}
       </div>
+      )}
     </div>
   );
 }
