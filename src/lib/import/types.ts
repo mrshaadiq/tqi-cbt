@@ -3,7 +3,10 @@ export const LABELS: Label[] = ['A', 'B', 'C', 'D', 'E'];
 
 export type DraftOption = { label: Label; body: string; image?: Blob };
 
-export type QuestionType = 'pg' | 'isian';
+/** pg dan isian dinilai; skala dan uraian = kuesioner, tidak ikut nilai total */
+export type QuestionType = 'pg' | 'isian' | 'skala' | 'uraian';
+
+export const SKALA_DEFAULT = ['Sangat Tidak Sesuai', 'Tidak Sesuai', 'Sesuai', 'Sangat Sesuai'];
 
 export type DraftQuestion = {
   /** nama bagian/section, default 'Umum' */
@@ -12,6 +15,8 @@ export type DraftQuestion = {
   type?: QuestionType;
   /** kunci soal isian: semua jawaban yang diterima */
   accepted?: string[];
+  /** soal skala: skor dibalik (pernyataan negatif) */
+  reverse?: boolean;
   stimulus: string | null;
   body: string;
   options: DraftOption[];

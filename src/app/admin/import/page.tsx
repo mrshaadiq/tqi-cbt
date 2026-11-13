@@ -149,6 +149,8 @@ export default function ImportPage() {
               {hasErr ? d.errors.map((e) => <Badge key={e} tone="danger">{e}</Badge>) : <Badge tone="success">Valid</Badge>}
               <Badge tone="neutral">{withTarget([d])[0].section || 'Umum'}</Badge>
               {d.type === 'isian' && <Badge tone="info">Isian</Badge>}
+              {d.type === 'skala' && <Badge tone="info">Skala (kuesioner){d.reverse ? ' · dibalik' : ''}</Badge>}
+              {d.type === 'uraian' && <Badge tone="info">Uraian (kuesioner)</Badge>}
               {!hasErr && d.stimulus && <Badge tone="brand">Teks pengantar terdeteksi</Badge>}
               {!hasErr && arabicOpts && <Badge tone="brand">{d.options.length} opsi, teks Arab</Badge>}
               <div className="flex-1" />

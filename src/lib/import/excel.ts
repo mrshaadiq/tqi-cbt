@@ -1,4 +1,4 @@
-import { LABELS, emptyDraft, type DraftQuestion, type Label } from './types';
+import { LABELS, SKALA_DEFAULT, emptyDraft, type DraftQuestion, type Label } from './types';
 import { splitAccepted } from './docx';
 
 const COL: Record<string, string[]> = {
@@ -8,6 +8,7 @@ const COL: Record<string, string[]> = {
   key: ['kunci', 'jawaban', 'kunci jawaban'],
   section: ['bagian', 'section', 'sesi'],
   type: ['tipe', 'jenis', 'type'],
+  reverse: ['dibalik', 'skor dibalik', 'terbalik', 'reverse', 'negatif'],
 };
 
 function findCol(header: string[], names: string[]): number {
@@ -25,6 +26,7 @@ export function rowsToDrafts(rows: string[][]): DraftQuestion[] {
     key: findCol(header, COL.key),
     section: findCol(header, COL.section),
     type: findCol(header, COL.type),
+    reverse: findCol(header, COL.reverse),
     opt: LABELS.map((l) => header.indexOf(l.toLowerCase())),
   };
   if (c.body < 0 || c.opt.some((i) => i < 0) && c.opt.filter((i) => i >= 0).length < 2 || c.key < 0) {
@@ -50,8 +52,22 @@ export function rowsToDrafts(rows: string[][]): DraftQuestion[] {
       remap.set(orig, label);
       d.options.push({ label, body: text });
     });
-    // tipe "isian", atau tipe kosong tanpa opsi = soal isian; kunci boleh beberapa dipisah |
     const tipe = get(c.type).toLowerCase();
+    // kuesioner: skala (opsi = pilihan berbobot 1..n, default 4 pilihan) dan uraian (tanpa opsi/kunci)
+    if (tipe.startsWith('uraian') || tipe.startsWith('esai') || tipe.startsWith('essay')) {
+      d.type = 'uraian';
+      d.options = [];
+      out.push(d);
+      continue;
+    }
+    if (tipe.startsWith('skala') || tipe.startsWith('likert')) {
+      d.type = 'skala';
+      if (!d.options.length) d.options = SKALA_DEFAULT.map((body, i) => ({ label: LABELS[i], body }));
+      d.reverse = /^(ya|y|yes|1|x|v|✓|dibalik|terbalik|negatif)$/i.test(get(c.reverse));
+      out.push(d);
+      continue;
+    }
+    // tipe "isian", atau tipe kosong tanpa opsi = soal isian; kunci boleh beberapa dipisah |
     if (tipe.startsWith('isian') || (!tipe.startsWith('pg') && d.options.length === 0)) {
       d.type = 'isian';
       d.options = [];

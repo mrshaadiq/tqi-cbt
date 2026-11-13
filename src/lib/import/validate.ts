@@ -14,6 +14,13 @@ export function validateDrafts(drafts: DraftQuestion[]): DraftQuestion[] {
     if (d.body.includes(RUMUS) || (d.stimulus ?? '').includes(RUMUS)) {
       errors.push('soal masih berisi [RUMUS] (rumus tidak terbaca), ganti dengan teks rumus');
     }
+    if (d.type === 'uraian') return { ...d, errors };
+    if (d.type === 'skala') {
+      if (d.options.length < 2) errors.push('pilihan skala kurang dari dua');
+      const empty = d.options.filter((o) => !o.body.trim()).map((o) => o.label);
+      if (empty.length) errors.push(`pilihan ${empty.join(', ')} kosong`);
+      return { ...d, errors };
+    }
     if (d.type === 'isian') {
       if (!(d.accepted ?? []).some((x) => x.trim())) errors.push('kunci isian kosong');
       return { ...d, errors };

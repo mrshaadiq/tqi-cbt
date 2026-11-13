@@ -5,6 +5,8 @@ export type ResultRow = {
   passed: boolean | null; eventCount: number;
   /** nilai per bagian (urutan sama untuk semua peserta) */
   sections?: { name: string; score: number }[];
+  /** skor kuesioner skala per bagian */
+  scales?: { name: string; score: number; max: number }[];
 };
 
 const XLSX = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
@@ -45,6 +47,8 @@ export async function exportResultsXlsx(rows: ResultRow[]): Promise<Blob> {
   const ws = wb.addWorksheet('Hasil');
   const sectionNames = [...new Set(rows.flatMap((r) => (r.sections ?? []).map((s) => s.name)))];
   if (sectionNames.length < 2) sectionNames.length = 0; // satu bagian saja: cukup kolom Nilai
+  const scaleNames = [...new Set(rows.flatMap((r) => (r.scales ?? []).map((s) => s.name)))];
+  const scaleMax = scaleNames.map((n) => Math.max(0, ...rows.flatMap((r) => (r.scales ?? []).filter((s) => s.name === n).map((s) => s.max))));
   ws.columns = [
     { header: 'Ranking', key: 'rank', width: 10 },
     { header: 'Nama', key: 'n', width: 32 },
@@ -52,6 +56,7 @@ export async function exportResultsXlsx(rows: ResultRow[]): Promise<Blob> {
     { header: 'Nilai', key: 's', width: 10 },
     ...sectionNames.map((n, i) => ({ header: `Nilai ${n}`, key: `sec${i}`, width: 16 })),
     { header: 'Jumlah Benar', key: 'c', width: 14 },
+    ...scaleNames.map((n, i) => ({ header: `${n} (maks ${scaleMax[i]})`, key: `sk${i}`, width: 18 })),
     { header: 'Status', key: 'p', width: 14 },
     { header: 'Kejadian', key: 'e', width: 10 },
   ];
@@ -63,6 +68,7 @@ export async function exportResultsXlsx(rows: ResultRow[]): Promise<Blob> {
     lastScore = r.score;
     lastRank = rank;
     ws.addRow({
+      ...Object.fromEntries(scaleNames.map((n, j) => [`sk${j}`, r.scales?.find((s) => s.name === n)?.score ?? ''])),
       ...Object.fromEntries(sectionNames.map((n, j) => [`sec${j}`, r.sections?.find((s) => s.name === n)?.score ?? ''])),
       rank, n: r.fullName, no: r.participantNo, s: r.score, c: r.correctCount,
       p: r.passed === null ? '' : r.passed ? 'Lulus' : 'Tidak lulus', e: r.eventCount,
@@ -74,11 +80,15 @@ export async function exportResultsXlsx(rows: ResultRow[]): Promise<Blob> {
 export async function exportTemplateXlsx(): Promise<Blob> {
   const wb = await newWorkbook();
   const ws = wb.addWorksheet('Soal');
-  ws.columns = ['no', 'bagian', 'tipe', 'pengantar', 'soal', 'A', 'B', 'C', 'D', 'E', 'kunci'].map((h, i) => ({ header: h, key: h, width: i === 3 || i === 4 ? 40 : 16 }));
+  ws.columns = ['no', 'bagian', 'tipe', 'pengantar', 'soal', 'A', 'B', 'C', 'D', 'E', 'kunci', 'dibalik'].map((h, i) => ({ header: h, key: h, width: i === 3 || i === 4 ? 40 : 16 }));
   ws.getRow(1).font = { bold: true };
   ws.addRow([1, 'Pengetahuan Umum', 'pg', '', 'Ibu kota Indonesia adalah ....', 'Bandung', 'Jakarta', 'Medan', 'Surabaya', '', 'B']);
   ws.addRow([2, 'Bahasa', 'pg', 'Bacalah pantun berikut! (teks pengantar boleh kosong)', 'Pantun di atas termasuk jenis ....', 'Sampiran', 'Isi', 'Syair', '', '', 'B']);
   ws.addRow([3, 'Matematika', 'isian', '', '12 x 3 = ....', '', '', '', '', '', '36 | tiga puluh enam']);
+  // kuesioner (tidak ikut nilai): skala tanpa opsi = 4 pilihan Sangat Tidak Sesuai..Sangat Sesuai (skor 1-4)
+  ws.addRow([4, 'A. Keinginan Pribadi', 'skala', '', 'Saya sendiri ingin menjadi santri TQI.', '', '', '', '', '', '', '']);
+  ws.addRow([5, 'A. Keinginan Pribadi', 'skala', '', 'Saya mengikuti seleksi karena orang tua menginginkannya.', '', '', '', '', '', '', 'ya']);
+  ws.addRow([6, 'Refleksi', 'uraian', '', 'Apa alasan paling utama yang membuatmu ingin menjadi santri TQI?', '', '', '', '', '', '', '']);
   return new Blob([await wb.xlsx.writeBuffer()], { type: XLSX });
 }
 

@@ -8,7 +8,7 @@ export type Attempt = {
 };
 export type StateOption = { id: string; label: string; body: string; image_path: string | null };
 export type StateQuestion = {
-  id: string; position: number; section: string; type: 'pg' | 'isian'; stimulus: string | null; body: string; image_path: string | null; options: StateOption[];
+  id: string; position: number; section: string; type: 'pg' | 'isian' | 'skala' | 'uraian'; stimulus: string | null; body: string; image_path: string | null; options: StateOption[];
 };
 export type AttemptState = {
   attempt_id: string; server_now: string; started_at: string; ends_at: string;

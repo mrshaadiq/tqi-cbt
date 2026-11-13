@@ -225,5 +225,49 @@ check('results memuat terjawab dan section', res.terjawab === 3 && res.total_soa
 await as(P1);
 await throwsMsg('peserta tidak boleh koreksi manual', `select admin_set_manual_correct('${as1.id}','${qb['Ibu kota?'].id}',true)`, 'forbidden');
 
+// --- kuesioner: skala dan uraian (tidak ikut nilai total) ---
+await as(A);
+await db.query(`select admin_reset_tryout()`);
+await db.query(`select admin_clear_bank()`);
+const skala = ['Sangat Tidak Sesuai', 'Tidak Sesuai', 'Sesuai', 'Sangat Sesuai'].map((b, i) => ({ label: 'ABCD'[i], body: b }));
+const kPayload = [
+  { section: 'Tes', type: 'pg', body: 'PG1', answer: 'A', options: [{ label: 'A', body: 'ok' }, { label: 'B', body: 'no' }] },
+  { section: 'A. Keinginan', type: 'skala', body: 'Positif', options: skala },
+  { section: 'A. Keinginan', type: 'skala', body: 'Negatif', reverse: true, options: skala },
+  { section: 'Refleksi', type: 'uraian', body: 'Ceritakan alasanmu' },
+];
+check('simpan pg + skala + uraian', (await q(`select admin_save_questions($1::jsonb) n`, [JSON.stringify(kPayload)]))[0].n === 4);
+check('skala tidak punya kunci', (await q(`select count(*)::int n from answer_keys k join questions q on q.id=k.question_id where q.type<>'pg'`))[0].n === 0);
+await as(P1);
+const tk = (await q(`select claim_session() t`))[0].t;
+const ak = (await q(`select * from start_attempt($1, $2)`, [examId, tk]))[0];
+const sk = (await q(`select get_attempt_state($1,$2) s`, [ak.id, tk]))[0].s;
+const kb = Object.fromEntries(sk.questions.map((x) => [x.body, x]));
+check('opsi skala tidak diacak', kb['Positif'].options.map((o) => o.label).join('') === 'ABCD');
+check('peserta tidak menerima tanda dibalik', !('reverse' in kb['Negatif']));
+const opt = (body, label) => kb[body].options.find((o) => o.label === label).id;
+await db.query(`select save_answer($1,$2,$3,false,1,$4)`, [ak.id, kb['PG1'].id, opt('PG1', 'A'), tk]);
+await db.query(`select save_answer($1,$2,$3,false,2,$4)`, [ak.id, kb['Positif'].id, opt('Positif', 'D'), tk]); // 4
+await db.query(`select save_answer($1,$2,$3,false,3,$4)`, [ak.id, kb['Negatif'].id, opt('Negatif', 'D'), tk]); // dibalik: 1
+const essay = 'x'.repeat(3000);
+await db.query(`select save_answer($1,$2,null,false,4,$3,$4)`, [ak.id, kb['Ceritakan alasanmu'].id, tk, essay]);
+await db.query(`select submit_attempt($1,$2)`, [ak.id, tk]);
+await as(A);
+const gk = (await q(`select score, correct_count, section_scores, scale_scores from attempts where id=$1`, [ak.id]))[0];
+check('nilai total hanya dari PG: 100', Number(gk.score) === 100 && gk.correct_count === 1, JSON.stringify(gk));
+check('section_scores tanpa bagian kuesioner', gk.section_scores.length === 1 && gk.section_scores[0].section === 'Tes');
+const sc = gk.scale_scores;
+check('skor skala 4 + 1 = 5 dari 8', sc.length === 1 && sc[0].section === 'A. Keinginan' && sc[0].score === 5 && sc[0].max === 8 && sc[0].answered === 2, JSON.stringify(sc));
+const dk = (await q(`select admin_attempt_detail($1) d`, [ak.id]))[0].d;
+const rU = dk.rows.find((r) => r.type === 'uraian');
+const rN = dk.rows.find((r) => r.question === 'Negatif');
+check('detail: uraian utuh 3000 karakter, skala berbobot', rU.chosen.length === 3000 && rU.is_correct === null && rN.weight === 1 && rN.reverse === true);
+const rk = (await q(`select terjawab, total_soal, scale_scores from results where attempt_id=$1`, [ak.id]))[0];
+check('results: terjawab/total hanya soal bernilai', rk.terjawab === 1 && rk.total_soal === 1 && rk.scale_scores.length === 1, JSON.stringify(rk));
+await throwsMsg('koreksi manual hanya untuk isian', `select admin_set_manual_correct('${ak.id}','${kb['Ceritakan alasanmu'].id}',true)`, 'not_found');
+const uq = (await q(`select id from questions where body='Positif'`))[0].id;
+await db.query(`select admin_update_question($1,$2::jsonb)`, [uq, JSON.stringify({ type: 'skala', body: 'Positif', reverse: true, options: skala })]);
+check('update skala: dibalik tersimpan', (await q(`select reverse from questions where id=$1`, [uq]))[0].reverse === true);
+
 console.log(`\n${pass} lulus, ${fail} gagal`);
 process.exit(fail ? 1 : 0);

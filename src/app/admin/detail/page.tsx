@@ -41,9 +41,12 @@ function Detail() {
   if (err) return <p className="text-danger-600">{err}</p>;
   if (!d) return <Spinner />;
 
-  const total = d.rows.length;
-  const benar = d.rows.filter((r) => r.is_correct).length;
-  const kosong = d.rows.filter((r) => !r.chosen).length;
+  // benar/salah/kosong hanya dari soal bernilai (pg, isian); kuesioner ditampilkan terpisah
+  const graded = d.rows.filter((r) => r.type === 'pg' || r.type === 'isian');
+  const total = graded.length;
+  const benar = graded.filter((r) => r.is_correct).length;
+  const kosong = graded.filter((r) => !r.chosen).length;
+  const essays = d.rows.filter((r) => r.type === 'uraian');
   const salah = total - benar - kosong;
   const score = d.attempt.score === null ? null : Number(d.attempt.score);
 
@@ -120,6 +123,22 @@ function Detail() {
             {passed !== null && <button className="self-start text-sm font-medium text-soft" onClick={() => mark(null)}>Batalkan tanda</button>}
           </div>
 
+          {(d.attempt.scale_scores?.length ?? 0) > 0 && (
+            <div className="flex flex-col gap-3 rounded-xl border border-line bg-white p-5">
+              <h2 className="text-base font-semibold leading-6 text-ink">Kuesioner (tidak ikut nilai)</h2>
+              {d.attempt.scale_scores!.map((s) => (
+                <div key={s.section} className="flex flex-col gap-1">
+                  <div className="flex text-sm leading-5">
+                    <span className="text-ink">{s.section}</span><div className="flex-1" />
+                    <span className="font-semibold tabular-nums text-ink">{s.score}<span className="font-normal text-muted"> / {s.max}</span></span>
+                  </div>
+                  <div className="h-1.5 w-full rounded-full bg-subtle"><div className="h-1.5 rounded-full bg-info-600" style={{ width: `${s.max ? (s.score / s.max) * 100 : 0}%` }} /></div>
+                  {s.answered < s.total && <span className="text-xs text-warning-600">{s.total - s.answered} pernyataan tidak diisi</span>}
+                </div>
+              ))}
+            </div>
+          )}
+
           <div className="flex flex-col gap-3 rounded-xl border border-line bg-white p-5">
             <div className="flex items-center">
               <h2 className="text-base font-semibold leading-6 text-ink">Log kejadian</h2>
@@ -173,10 +192,24 @@ function Detail() {
         </div>
       </div>
 
+      {essays.length > 0 && (
+        <div className="flex flex-col gap-4 rounded-xl border border-line bg-white p-5">
+          <h2 className="text-base font-semibold leading-6 text-ink">Jawaban uraian</h2>
+          {essays.map((r) => (
+            <div key={r.question_id} className="flex flex-col gap-1.5">
+              <RtlText text={r.question} className="text-sm font-medium leading-5 text-ink" />
+              {r.chosen
+                ? <p dir="auto" className="whitespace-pre-wrap rounded-[10px] bg-subtle p-3 text-sm leading-6 text-ink">{r.chosen}</p>
+                : <p className="text-sm italic text-muted">tidak diisi</p>}
+            </div>
+          ))}
+        </div>
+      )}
+
       <div ref={answers} className="flex flex-col gap-3 rounded-xl border border-line bg-white p-5">
         <h2 className="text-base font-semibold leading-6 text-ink">Jawaban per soal</h2>
         <ul className="divide-y divide-line">
-          {d.rows.map((r, i) => (
+          {d.rows.map((r, i) => r.type === 'uraian' ? null : (
             <li key={r.position} className="flex flex-col">
               {(i === 0 || d.rows[i - 1].section !== r.section) && new Set(d.rows.map((x) => x.section)).size > 1 && (
                 <span className="pb-1 pt-3 text-xs font-semibold uppercase leading-4 text-muted">{r.section}</span>
@@ -187,7 +220,8 @@ function Detail() {
                   <RtlText text={r.question} className="mb-1 font-medium text-ink" />
                   <div className="flex flex-wrap gap-x-4 gap-y-1 text-soft">
                     <span>{r.type === 'isian' ? 'Jawaban' : 'Dipilih'}: {r.chosen ? <RtlText text={r.chosen} className="inline-block text-ink" /> : <i className="text-muted">kosong</i>}</span>
-                    {(!r.is_correct || r.type === 'isian') && <span className="text-success-600">Kunci: <RtlText text={r.correct ?? '-'} className="inline-block" /></span>}
+                    {r.type === 'skala' && r.weight !== null && <span className="text-info-600">Skor {r.weight}{r.reverse ? ' (dibalik)' : ''}</span>}
+                    {r.type !== 'skala' && (!r.is_correct || r.type === 'isian') && <span className="text-success-600">Kunci: <RtlText text={r.correct ?? '-'} className="inline-block" /></span>}
                   </div>
                   {r.type === 'isian' && d.attempt.status !== 'in_progress' && (
                     <div className="mt-1.5 flex flex-wrap items-center gap-3 text-xs font-medium">
@@ -198,7 +232,9 @@ function Detail() {
                     </div>
                   )}
                 </div>
-                <Badge tone={r.is_correct ? 'success' : r.chosen ? 'danger' : 'neutral'}>{r.is_correct ? 'Benar' : r.chosen ? 'Salah' : 'Kosong'}</Badge>
+                {r.type === 'skala'
+                  ? <Badge tone={r.chosen ? 'info' : 'neutral'}>{r.chosen ? 'Skala' : 'Kosong'}</Badge>
+                  : <Badge tone={r.is_correct ? 'success' : r.chosen ? 'danger' : 'neutral'}>{r.is_correct ? 'Benar' : r.chosen ? 'Salah' : 'Kosong'}</Badge>}
               </div>
             </li>
           ))}

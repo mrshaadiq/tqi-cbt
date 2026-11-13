@@ -11,8 +11,10 @@ async function rpc<T>(fn: string, args: Record<string, unknown> = {}): Promise<T
 
 /* ------------------------------ bank soal ------------------------------ */
 
+export type QType = 'pg' | 'isian' | 'skala' | 'uraian';
+
 export type QuestionRow = {
-  id: string; position: number; section: string; type: 'pg' | 'isian'; stimulus: string | null; body: string; image_path: string | null; is_active: boolean;
+  id: string; position: number; section: string; type: QType; reverse: boolean; stimulus: string | null; body: string; image_path: string | null; is_active: boolean;
   options: { id: string; label: Label; body: string; image_path: string | null }[];
   answer_keys: { option_id: string | null; accepted: string[] | null } | null;
 };
@@ -20,7 +22,7 @@ export type QuestionRow = {
 export async function listQuestions(): Promise<QuestionRow[]> {
   const { data, error } = await supabase
     .from('questions')
-    .select('id, position, section, type, stimulus, body, image_path, is_active, options(id, label, body, image_path), answer_keys(option_id, accepted)')
+    .select('id, position, section, type, reverse, stimulus, body, image_path, is_active, options(id, label, body, image_path), answer_keys(option_id, accepted)')
     .order('position');
   if (error) throw new Error(error.message);
   return (data as unknown as QuestionRow[]).map((q) => ({
@@ -32,7 +34,7 @@ export async function listQuestions(): Promise<QuestionRow[]> {
 export function rowToDraft(q: QuestionRow): DraftQuestion {
   const key = q.options.find((o) => o.id === q.answer_keys?.option_id);
   return {
-    section: q.section, type: q.type, accepted: q.answer_keys?.accepted ?? [],
+    section: q.section, type: q.type, reverse: q.reverse, accepted: q.answer_keys?.accepted ?? [],
     stimulus: q.stimulus, body: q.body, answer: key?.label ?? null,
     options: q.options.map((o) => ({ label: o.label, body: o.body })),
     errors: [], notes: [],
@@ -40,6 +42,8 @@ export function rowToDraft(q: QuestionRow): DraftQuestion {
 }
 
 export function isProblematic(q: QuestionRow): boolean {
+  if (q.type === 'uraian') return !q.body.trim();
+  if (q.type === 'skala') return q.options.length < 2 || !q.body.trim() || q.options.some((o) => !o.body.trim());
   if (q.type === 'isian') return !q.answer_keys?.accepted?.length || !q.body.trim();
   return !q.answer_keys?.option_id || q.options.length < 2 || !q.body.trim() || q.options.some((o) => !o.body.trim() && !o.image_path);
 }
@@ -64,14 +68,14 @@ export async function saveQuestions(drafts: DraftQuestion[]): Promise<number> {
     const image_path = d.image ? await uploadQuestionImage(d.image) : null;
     const options = [];
     for (const o of d.options) options.push({ label: o.label, body: o.body, image_path: o.image ? await uploadQuestionImage(o.image) : null });
-    payload.push({ section: d.section || 'Umum', type: d.type ?? 'pg', accepted: d.accepted ?? [], stimulus: d.stimulus, body: d.body, image_path, answer: d.answer, options, is_active: true });
+    payload.push({ section: d.section || 'Umum', type: d.type ?? 'pg', reverse: !!d.reverse, accepted: d.accepted ?? [], stimulus: d.stimulus, body: d.body, image_path, answer: d.answer, options, is_active: true });
   }
   return rpc<number>('admin_save_questions', { p_payload: payload });
 }
 
 export async function updateQuestion(id: string, d: DraftQuestion, isActive: boolean, imagePath: string | null): Promise<void> {
   await rpc('admin_update_question', {
-    p: { section: d.section || 'Umum', type: d.type ?? 'pg', accepted: d.accepted ?? [], stimulus: d.stimulus, body: d.body, answer: d.answer, is_active: isActive, image_path: imagePath, options: d.options.map((o) => ({ label: o.label, body: o.body })) },
+    p: { section: d.section || 'Umum', type: d.type ?? 'pg', reverse: !!d.reverse, accepted: d.accepted ?? [], stimulus: d.stimulus, body: d.body, answer: d.answer, is_active: isActive, image_path: imagePath, options: d.options.map((o) => ({ label: o.label, body: o.body })) },
     p_id: id,
   });
 }
@@ -191,11 +195,12 @@ export const reopenAttempt = (id: string, minutes: number) => rpc('admin_reopen_
 export const stopExam = (examId: string) => rpc<number>('admin_stop_exam', { p_exam_id: examId });
 export const finalizeExpired =(examId: string) => rpc<number>('finalize_expired', { p_exam_id: examId });
 
+export type ScaleScore = { section: string; score: number; max: number; answered: number; total: number };
 export type SectionScore = { section: string; total: number; correct: number; score: number };
 
 export type ResultDbRow = {
   attempt_id: string; full_name: string; participant_no: string; score: number; correct_count: number;
-  status: string; terjawab: number; total_soal: number; section_scores: SectionScore[] | null; passed: boolean | null; kejadian: number; rank: number;
+  status: string; terjawab: number; total_soal: number; section_scores: SectionScore[] | null; scale_scores: ScaleScore[] | null; passed: boolean | null; kejadian: number; rank: number;
 };
 export async function results(): Promise<ResultDbRow[]> {
   const { data, error } = await supabase.from('results').select('*').order('score', { ascending: false }).order('full_name');
@@ -212,8 +217,8 @@ export async function setPassed(attemptId: string, passed: boolean | null) {
 }
 
 export type AttemptDetail = {
-  attempt: { id: string; full_name: string; participant_no: string; status: string; score: number | null; correct_count: number | null; section_scores: SectionScore[] | null; started_at: string; ends_at: string; submitted_at: string | null };
-  rows: { question_id: string; position: number; section: string; type: 'pg' | 'isian'; manual_correct: boolean | null; question: string; chosen: string | null; correct: string | null; is_correct: boolean; flagged: boolean }[];
+  attempt: { id: string; full_name: string; participant_no: string; status: string; score: number | null; correct_count: number | null; section_scores: SectionScore[] | null; scale_scores: ScaleScore[] | null; started_at: string; ends_at: string; submitted_at: string | null };
+  rows: { question_id: string; position: number; section: string; type: QType; reverse: boolean; weight: number | null; manual_correct: boolean | null; question: string; chosen: string | null; correct: string | null; is_correct: boolean | null; flagged: boolean }[];
   events: { type: string; created_at: string }[];
 };
 export const attemptDetail = (id: string) => rpc<AttemptDetail>('admin_attempt_detail', { p_attempt_id: id });

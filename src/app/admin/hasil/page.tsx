@@ -66,6 +66,7 @@ export default function HasilPage() {
             rank: r.rank, fullName: r.full_name, participantNo: r.participant_no, score: Number(r.score), correctCount: r.correct_count,
             passed: r.passed, eventCount: r.kejadian,
             sections: (r.section_scores ?? []).map((s) => ({ name: s.section, score: Number(s.score) })),
+            scales: (r.scale_scores ?? []).map((s) => ({ name: s.section, score: s.score, max: s.max })),
           }))), 'hasil-tes.xlsx')}>Ekspor Excel</Button>
         </div>
       </div>

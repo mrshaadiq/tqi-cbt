@@ -313,7 +313,21 @@ export default function ExamRunner({ state, token, profile, clock, streamRef, on
             {img && <img src={img} alt="" className="max-h-72 self-start rounded-lg" />}
             <RtlText text={q.body} className="text-base font-semibold leading-6 text-ink md:text-xl md:leading-7" />
 
-            {q.type === 'isian' ? (
+            {q.type === 'uraian' ? (
+              <label className="flex flex-col gap-1.5">
+                <span className="text-xs font-medium leading-4 text-muted">Tulis jawaban dengan kalimatmu sendiri</span>
+                <textarea
+                  dir="auto"
+                  rows={7}
+                  maxLength={5000}
+                  value={cur?.text ?? ''}
+                  onChange={(e) => typeAnswer(q.id, e.target.value)}
+                  onBlur={() => flushTypingRef.current()}
+                  className="w-full resize-y rounded-xl border border-line-strong bg-white p-3 text-base leading-6 text-ink outline-none focus:border-2 focus:border-brand-600 md:p-4"
+                />
+                <span className="self-end text-xs leading-4 text-muted">{(cur?.text ?? '').length}/5000</span>
+              </label>
+            ) : q.type === 'isian' ? (
               <label className="flex flex-col gap-1.5">
                 <span className="text-xs font-medium leading-4 text-muted">Ketik jawaban Anda</span>
                 <input
@@ -341,7 +355,7 @@ export default function ExamRunner({ state, token, profile, clock, streamRef, on
                     onClick={() => save(q.id, o.id, cur?.flagged ?? false, null)}
                     className={`flex w-full items-center gap-3 rounded-xl p-3 text-left transition md:gap-3.5 md:p-4 ${selected ? 'border-2 border-brand-600 bg-brand-50' : 'border border-line bg-white hover:bg-brand-50/50'}`}
                   >
-                    <span className={`flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-full text-sm font-medium leading-5 md:h-[34px] md:w-[34px] ${selected ? 'bg-brand-600 text-white' : 'bg-subtle text-soft'}`}>{LETTERS[i]}</span>
+                    <span className={`flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-full text-sm font-medium leading-5 md:h-[34px] md:w-[34px] ${selected ? 'bg-brand-600 text-white' : 'bg-subtle text-soft'}`}>{q.type === 'skala' ? i + 1 : LETTERS[i]}</span>
                     <span className="min-w-0 flex-1">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       {oi && <img src={oi} alt="" className="mb-1 max-h-32 rounded" />}

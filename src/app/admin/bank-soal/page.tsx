@@ -10,12 +10,21 @@ import QuestionEditor from '@/components/QuestionEditor';
 import RtlText from '@/components/RtlText';
 import { Badge, Button, Icon, Spinner } from '@/components/ui';
 
-type Filter = 'semua' | 'isian' | 'arab' | 'pengantar' | 'gambar' | 'nonaktif' | 'bermasalah';
+type Filter = 'semua' | 'isian' | 'kuesioner' | 'arab' | 'pengantar' | 'gambar' | 'nonaktif' | 'bermasalah';
 const PAGE = 8;
 const ALL = '__semua__';
 const cols = 'md:grid md:grid-cols-[50px_minmax(0,1fr)_60px_60px_130px_230px] md:items-center md:gap-3';
 
-const hasArabic = (q: QuestionRow) => isMostlyArabic(q.body) || q.options.some((o) => isMostlyArabic(o.body));
+const TYPE_NAME = { pg: 'PG', isian: 'isian', skala: 'skala', uraian: 'uraian' } as const;
+/** "120 PG, 5 isian, 25 skala" (jenis yang jumlahnya 0 tidak ditulis) */
+const typeSummary = (list: QuestionRow[]) =>
+  (Object.keys(TYPE_NAME) as (keyof typeof TYPE_NAME)[])
+    .map((t) => [t, list.filter((r) => r.type === t).length] as const)
+    .filter(([, n]) => n > 0)
+    .map(([t, n]) => `${n} ${TYPE_NAME[t]}`)
+    .join(', ') || 'kosong';
+
+const hasArabic =(q: QuestionRow) => isMostlyArabic(q.body) || q.options.some((o) => isMostlyArabic(o.body));
 
 export default function BankSoalPage() {
   const [rows, setRows] = useState<QuestionRow[] | null>(null);
@@ -47,6 +56,7 @@ export default function BankSoalPage() {
     if (filter === 'gambar' && !q.image_path && !q.options.some((o) => o.image_path)) return false;
     if (filter === 'nonaktif' && q.is_active) return false;
     if (filter === 'isian' && q.type !== 'isian') return false;
+    if (filter === 'kuesioner' && q.type !== 'skala' && q.type !== 'uraian') return false;
     if (filter === 'bermasalah' && !isProblematic(q)) return false;
     return !search || (q.section + ' ' + q.body + ' ' + (q.stimulus ?? '')).toLowerCase().includes(search.toLowerCase());
   }), [rows, filter, search, section]);
@@ -60,6 +70,7 @@ export default function BankSoalPage() {
   const chips: { id: Filter; label: string }[] = [
     { id: 'semua', label: `Semua (${rows.length})` },
     { id: 'isian', label: `Isian (${rows.filter((r) => r.type === 'isian').length})` },
+    { id: 'kuesioner', label: `Kuesioner (${rows.filter((r) => r.type === 'skala' || r.type === 'uraian').length})` },
     { id: 'arab', label: `Teks Arab (${rows.filter(hasArabic).length})` },
     { id: 'pengantar', label: 'Ada teks pengantar' },
     { id: 'gambar', label: 'Ada gambar' },
@@ -149,9 +160,8 @@ export default function BankSoalPage() {
           <h1 className="text-2xl font-bold leading-8 text-ink">Bank Soal</h1>
           <p className="whitespace-pre text-sm leading-5 text-soft">{(() => {
             const act = rows.filter((r) => r.is_active);
-            const isian = act.filter((r) => r.type === 'isian').length;
             const secs = new Set(act.map((r) => r.section)).size;
-            return `${act.length} soal aktif (${act.length - isian} pilihan ganda, ${isian} isian)  ·  ${secs} bagian`;
+            return `${act.length} soal aktif (${typeSummary(act)})  ·  ${secs} bagian`;
           })()}</p>
         </div>
         <div className="flex-1" />
@@ -175,12 +185,11 @@ export default function BankSoalPage() {
           {sections.map((s, i) => {
             const list = rows.filter((r) => r.section === s);
             const act = list.filter((r) => r.is_active);
-            const isian = act.filter((r) => r.type === 'isian').length;
             return (
               <button key={s} onClick={() => pick(s)}
                 className={`flex flex-col rounded-[10px] border px-3.5 py-2 text-left ${section === s ? 'border-brand-600 bg-brand-50' : 'border-line bg-white'}`}>
                 <span className="text-sm font-semibold leading-5 text-ink">{i + 1}. {s}</span>
-                <span className="text-xs leading-4 text-muted">{list.length ? `${act.length} aktif · ${act.length - isian} PG, ${isian} isian` : 'belum ada soal'}</span>
+                <span className="text-xs leading-4 text-muted">{list.length ? `${act.length} aktif · ${typeSummary(act)}` : 'belum ada soal'}</span>
               </button>
             );
           })}
@@ -256,9 +265,9 @@ export default function BankSoalPage() {
                 <p dir="auto" className="min-w-0 text-sm leading-5 text-ink md:truncate md:pr-2">
                   <span className="mr-1.5 rounded bg-subtle px-1.5 py-0.5 text-xs font-medium text-soft">{q.section}</span>{text}
                 </p>
-                <span className="text-sm leading-5 text-ink">{q.type === 'isian' ? 'Isian' : q.options.length || '-'}</span>
+                <span className="text-sm leading-5 text-ink">{q.type === 'isian' ? 'Isian' : q.type === 'uraian' ? 'Uraian' : q.type === 'skala' ? `Skala ${q.options.length}` : q.options.length || '-'}</span>
                 <span className="truncate text-sm leading-5 text-ink" title={q.answer_keys?.accepted?.join(' | ')}>
-                  {q.type === 'isian' ? q.answer_keys?.accepted?.[0] ?? '-' : key?.label ?? '-'}
+                  {q.type === 'isian' ? q.answer_keys?.accepted?.[0] ?? '-' : q.type === 'skala' ? (q.reverse ? 'Dibalik' : '-') : q.type === 'uraian' ? '-' : key?.label ?? '-'}
                 </span>
                 <div>{label(q)}</div>
                 <div className="flex gap-3.5 text-sm font-medium leading-5">

@@ -32,6 +32,20 @@ describe('section dan soal isian', () => {
     expect(d[1]).toMatchObject({ section: 'Hitung', type: 'isian', accepted: ['4', 'empat'], options: [] });
   });
 
+  it('excel: kuesioner skala (default 4 pilihan, dibalik) dan uraian', () => {
+    const d = validateDrafts(rowsToDrafts([
+      ['no', 'bagian', 'tipe', 'soal', 'A', 'B', 'C', 'D', 'E', 'kunci', 'dibalik'],
+      ['1', 'A. Keinginan', 'skala', 'Saya ingin', '', '', '', '', '', '', ''],
+      ['2', 'A. Keinginan', 'skala', 'Karena orang tua', '', '', '', '', '', '', 'ya'],
+      ['3', 'Refleksi', 'uraian', 'Ceritakan', '', '', '', '', '', '', ''],
+    ]));
+    expect(d.every((x) => x.errors.length === 0)).toBe(true);
+    expect(d[0]).toMatchObject({ type: 'skala', reverse: false });
+    expect(d[0].options.map((o) => o.body)).toEqual(['Sangat Tidak Sesuai', 'Tidak Sesuai', 'Sesuai', 'Sangat Sesuai']);
+    expect(d[1].reverse).toBe(true);
+    expect(d[2]).toMatchObject({ type: 'uraian', options: [] });
+  });
+
   it('isian tanpa kunci ditandai error', () => {
     const [v] = validateDrafts([{ type: 'isian', stimulus: null, body: 'x', options: [], answer: null, accepted: [''], errors: [], notes: [] }]);
     expect(v.errors).toContain('kunci isian kosong');
