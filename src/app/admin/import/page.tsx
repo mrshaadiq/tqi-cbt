@@ -1,5 +1,5 @@
 'use client';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { IMPORT_ERRORS, importFile } from '@/lib/import';
 import { validateDrafts } from '@/lib/import/validate';
@@ -21,6 +21,11 @@ export default function ImportPage() {
   const [editing, setEditing] = useState<number | null>(null);
   const [replace, setReplace] = useState(false);
   const input = useRef<HTMLInputElement>(null);
+  // bagian tujuan untuk soal yang di file tidak punya judul bagian (dari tombol "Impor ke bagian ini")
+  const [target, setTarget] = useState('');
+  useEffect(() => { setTarget(new URLSearchParams(window.location.search).get('bagian') ?? ''); }, []);
+  const withTarget = (ds: DraftQuestion[]) =>
+    target.trim() ? ds.map((d) => (!d.section || d.section === 'Umum' ? { ...d, section: target.trim() } : d)) : ds;
 
   async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0];
@@ -49,7 +54,7 @@ export default function ImportPage() {
     setBusy(true); setError('');
     try {
       if (replace) await clearBank();
-      setDone(await saveQuestions(drafts));
+      setDone(await saveQuestions(withTarget(drafts)));
       setDrafts(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Gagal menyimpan.');
@@ -93,6 +98,18 @@ export default function ImportPage() {
         <Button variant="ghost" className="text-soft" disabled={busy} onClick={() => input.current?.click()}>{drafts ? 'Ganti file' : 'Pilih file'}</Button>
       </div>
 
+      <label className="flex flex-col gap-2 rounded-xl border border-line bg-white p-4 md:flex-row md:items-center md:gap-3">
+        <span className="text-sm font-medium leading-5 text-ink">Masukkan ke bagian</span>
+        <input
+          dir="auto"
+          value={target}
+          onChange={(e) => setTarget(e.target.value)}
+          placeholder="Umum"
+          className="h-10 rounded-[10px] border border-line px-3 text-sm md:w-64"
+        />
+        <span className="text-xs leading-4 text-muted">Dipakai untuk soal yang di file tidak punya judul bagian. Kosongkan = &quot;Umum&quot;.</span>
+      </label>
+
       <div className="flex items-start gap-2.5 rounded-xl bg-info-50 px-4 py-3">
         <Icon name="info-blue-18" size={18} />
         <p className="flex-1 text-sm font-medium leading-5 text-info-600">
@@ -130,7 +147,7 @@ export default function ImportPage() {
             <div className="flex flex-wrap items-center gap-2.5">
               <span className="text-base font-semibold leading-6 text-ink">Soal {i + 1}</span>
               {hasErr ? d.errors.map((e) => <Badge key={e} tone="danger">{e}</Badge>) : <Badge tone="success">Valid</Badge>}
-              <Badge tone="neutral">{d.section || 'Umum'}</Badge>
+              <Badge tone="neutral">{withTarget([d])[0].section || 'Umum'}</Badge>
               {d.type === 'isian' && <Badge tone="info">Isian</Badge>}
               {!hasErr && d.stimulus && <Badge tone="brand">Teks pengantar terdeteksi</Badge>}
               {!hasErr && arabicOpts && <Badge tone="brand">{d.options.length} opsi, teks Arab</Badge>}

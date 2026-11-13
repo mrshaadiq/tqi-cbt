@@ -88,6 +88,41 @@ export async function deleteQuestion(id: string) {
 
 export const clearBank = () => rpc<number>('admin_clear_bank');
 
+/* ------------------------------ bagian / section ------------------------------ */
+
+/** Daftar bagian sesuai urutan ujian (urutan = posisi soal pertama di bagian itu). */
+export function sectionOrder(rows: { section: string; position: number }[]): string[] {
+  const first = new Map<string, number>();
+  for (const r of rows) first.set(r.section, Math.min(first.get(r.section) ?? Infinity, r.position));
+  return [...first.entries()].sort((a, b) => a[1] - b[1]).map(([s]) => s);
+}
+
+export async function renameSection(from: string, to: string) {
+  const name = to.trim();
+  if (!name) throw new Error('Nama bagian tidak boleh kosong.');
+  const { error } = await supabase.from('questions').update({ section: name }).eq('section', from);
+  if (error) throw new Error(error.message);
+}
+
+export async function moveQuestions(ids: string[], section: string) {
+  const name = section.trim();
+  if (!name) throw new Error('Nama bagian tidak boleh kosong.');
+  const { error } = await supabase.from('questions').update({ section: name }).in('id', ids);
+  if (error) throw new Error(error.message);
+}
+
+/** Susun ulang nomor soal supaya bagian tampil sesuai urutan `order` (urutan soal di dalam bagian tetap). */
+export async function reorderSections(rows: QuestionRow[], order: string[]) {
+  const rank = new Map(order.map((s, i) => [s, i]));
+  const sorted = [...rows].sort((a, b) => (rank.get(a.section) ?? 999) - (rank.get(b.section) ?? 999) || a.position - b.position);
+  const changes = sorted.map((r, i) => ({ id: r.id, position: i + 1 })).filter((c, i) => sorted[i].position !== c.position);
+  for (let i = 0; i < changes.length; i += 20) {
+    const res = await Promise.all(changes.slice(i, i + 20).map((c) => supabase.from('questions').update({ position: c.position }).eq('id', c.id)));
+    const err = res.find((r) => r.error)?.error;
+    if (err) throw new Error(err.message);
+  }
+}
+
 /* ------------------------------ peserta ------------------------------ */
 
 export type ParticipantRow = { id: string; full_name: string; participant_no: string; camera_excluded: boolean; session_token: string | null };
