@@ -45,6 +45,10 @@ export default function ImportPage() {
   const update = (i: number, d: DraftQuestion) => setDrafts((all) => validateDrafts(all!.map((x, j) => (j === i ? d : x))));
   const remove = (i: number) => setDrafts((all) => validateDrafts(all!.filter((_, j) => j !== i)));
   const removeBad = () => setDrafts((all) => validateDrafts(all!.filter((d) => !d.errors.length)));
+  // soal isian tanpa kunci -> uraian (kuesioner, tidak dinilai)
+  const noKey = (d: DraftQuestion) => d.type === 'isian' && d.errors.includes('kunci isian kosong');
+  const asEssay = (d: DraftQuestion): DraftQuestion => ({ ...d, type: 'uraian', accepted: [], options: [] });
+  const allEssay = () => setDrafts((all) => validateDrafts(all!.map((d) => (noKey(d) ? asEssay(d) : d))));
 
   const bad = drafts?.filter((d) => d.errors.length).length ?? 0;
   const total = drafts?.length ?? 0;
@@ -130,6 +134,11 @@ export default function ImportPage() {
           <p className="flex-1 text-sm font-medium leading-5 text-danger-600">
             Ada {bad} soal yang perlu diperiksa (ditandai merah). Perbaiki atau buang sebelum bisa menyimpan. Tidak ada soal yang masuk bank sebelum Anda mengonfirmasi.
           </p>
+          {drafts.some(noKey) && (
+            <button className="whitespace-nowrap rounded-[10px] bg-danger-600 px-3 py-2 text-xs font-medium text-white" onClick={allEssay}>
+              Semua tanpa kunci → uraian
+            </button>
+          )}
           <label className="flex items-center gap-1.5 whitespace-nowrap text-xs font-medium text-danger-600">
             <input type="checkbox" checked={onlyBad} onChange={(e) => setOnlyBad(e.target.checked)} />hanya tampilkan
           </label>
@@ -189,10 +198,23 @@ export default function ImportPage() {
                 {d.notes.map((n) => <p key={n} className="text-xs font-medium leading-4 text-warning-600">ⓘ {n}</p>)}
                 {hasErr && (
                   <div className="flex flex-wrap gap-2.5">
-                    <Button variant="secondary" onClick={() => setEditing(i)}>Ketik rumus manual</Button>
-                    <Button variant="secondary" onClick={() => setEditing(i)}>Tempel gambar rumus</Button>
+                    {noKey(d) && <Button onClick={() => update(i, asEssay(d))}>Tanpa kunci (jadikan uraian)</Button>}
+                    {noKey(d) && <Button variant="secondary" onClick={() => setEditing(i)}>Isi kunci</Button>}
+                    {d.errors.some((e) => e.includes('[RUMUS]')) && (
+                      <>
+                        <Button variant="secondary" onClick={() => setEditing(i)}>Ketik rumus manual</Button>
+                        <Button variant="secondary" onClick={() => setEditing(i)}>Tempel gambar rumus</Button>
+                      </>
+                    )}
+                    {!noKey(d) && !d.errors.some((e) => e.includes('[RUMUS]')) && <Button variant="secondary" onClick={() => setEditing(i)}>Perbaiki</Button>}
                     <Button variant="danger" onClick={() => remove(i)}>Buang soal</Button>
                   </div>
+                )}
+                {d.type === 'uraian' && (
+                  <p className="text-xs font-medium leading-4 text-muted">
+                    Uraian: tanpa kunci, tidak ikut nilai, jawaban dibaca panitia.{' '}
+                    <button className="text-brand-600" onClick={() => update(i, { ...d, type: 'isian', accepted: [] })}>Ubah jadi isian berkunci</button>
+                  </p>
                 )}
               </>
             )}
@@ -211,6 +233,9 @@ export default function ImportPage() {
             </label>
           </div>
           <div className="flex-1" />
+          {(drafts?.filter(noKey).length ?? 0) > 0 && (
+            <Button variant="secondary" onClick={allEssay}>{drafts!.filter(noKey).length} isian tanpa kunci → uraian</Button>
+          )}
           {bad > 0 && <Button variant="secondary" onClick={removeBad}>Buang yang bermasalah</Button>}
           <Button disabled={busy || bad > 0 || total === 0} className="disabled:opacity-45" onClick={save}>{busy ? 'Menyimpan…' : `Simpan ${total} soal`}</Button>
         </div>

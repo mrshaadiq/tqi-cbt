@@ -2,8 +2,12 @@ import { RUMUS, type DraftQuestion } from './types';
 
 export function validateDrafts(drafts: DraftQuestion[]): DraftQuestion[] {
   let prevNo: number | undefined;
+  let prevSection: string | undefined;
   return drafts.map((d) => {
     const errors: string[] = [];
+    // nomor boleh mulai dari 1 lagi di bagian baru
+    if (d.section !== prevSection) prevNo = undefined;
+    prevSection = d.section;
     if (d.sourceNo !== undefined) {
       if (prevNo !== undefined && d.sourceNo !== prevNo + 1) {
         errors.push(`nomor loncat (setelah ${prevNo} muncul ${d.sourceNo})`);

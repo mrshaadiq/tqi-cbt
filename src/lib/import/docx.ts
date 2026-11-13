@@ -1,5 +1,6 @@
 import JSZip from 'jszip';
 import { LABELS, RUMUS, type DraftOption, type DraftQuestion } from './types';
+import { parseQuestionText } from './textFormat';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const M = 'http://schemas.openxmlformats.org/officeDocument/2006/math';
@@ -82,6 +83,25 @@ export const SECTION_RE = /^(?:#{1,3}\s*|(?:section|bagian|sesi)\s*\d*\s*[:.\-�
 export const KEY_RE = /^(?:kunci|jawaban)\s*[:=]\s*(.+)$/i;
 export const splitAccepted = (s: string | null | undefined) => (s ?? '').split('|').map((x) => x.trim()).filter(Boolean);
 
+/** Isi dokumen sebagai baris teks: satu paragraf = satu baris, satu baris tabel = sel-selnya digabung spasi (kotak centang dibuang). */
+export function docxLines(body: Element): string[] {
+  const out: string[] = [];
+  const paraText = (p: Element) => collectText(p).replace(/\s+/g, ' ').trim();
+  for (const el of Array.from(body.children)) {
+    if (el.namespaceURI !== W) continue;
+    if (el.localName === 'p') {
+      out.push(...collectText(el).split('\n').map((s) => s.trim()));
+    } else if (el.localName === 'tbl') {
+      for (const tr of Array.from(el.getElementsByTagNameNS(W, 'tr'))) {
+        const cells = Array.from(tr.getElementsByTagNameNS(W, 'tc')).map((tc) =>
+          Array.from(tc.getElementsByTagNameNS(W, 'p')).map(paraText).filter(Boolean).join(' '));
+        out.push(cells.filter((c) => c && !/^[☐□✓✔\s]+$/.test(c)).join(' '));
+      }
+    }
+  }
+  return out.filter(Boolean);
+}
+
 export async function parseDocx(file: File | Blob): Promise<DraftQuestion[]> {
   return parseDocxBuffer(await file.arrayBuffer());
 }
@@ -159,7 +179,13 @@ export async function parseDocxBuffer(buf: ArrayBuffer | Uint8Array): Promise<Dr
     runs.set(p.numId, e);
     prev = p.numId;
   });
-  if (!runs.size) throw new Error('DOCX_NO_NUMBERING');
+  if (!runs.size) {
+    // tanpa daftar bernomor Word (nomor diketik manual / soal di dalam tabel, mis. kuesioner):
+    // baca sebagai teks polos baris per baris, tabel dibaca per baris tabel
+    const drafts = parseQuestionText(docxLines(body).join('\n'));
+    if (!drafts.length) throw new Error('DOCX_NO_NUMBERING');
+    return drafts;
+  }
   const qNum = [...runs.entries()].sort(
     (a, b) => b[1].blocks - a[1].blocks || b[1].count - a[1].count || a[1].first - b[1].first,
   )[0][0];
