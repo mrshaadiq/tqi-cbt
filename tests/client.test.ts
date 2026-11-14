@@ -152,4 +152,34 @@ describe('export excel', () => {
     expect(names).toEqual(['Ani', 'Budi', 'Cici']);
     expect(ranks).toEqual([1, 2, 2]);
   });
+  it('hasil lengkap: sheet kuesioner skala, keterangan, refleksi, jawaban, log', async () => {
+    const mk = (n: string) => ({ rank: 0, fullName: n, participantNo: n, score: 50, correctCount: 1, passed: null, eventCount: 0 });
+    const ans = (pg: string | null, ok: boolean, w1: number | null, w2: number | null, essay: string | null) => [
+      { position: 1, section: 'Tes', type: 'pg' as const, question: 'Soal 1', chosen: pg, weight: null, reverse: false, is_correct: ok },
+      { position: 2, section: 'A. Keinginan', type: 'skala' as const, question: 'Saya ingin mondok', chosen: 'x', weight: w1, reverse: false, is_correct: null },
+      { position: 3, section: 'A. Keinginan', type: 'skala' as const, question: 'Disuruh orang tua', chosen: 'x', weight: w2, reverse: true, is_correct: null },
+      { position: 4, section: 'Refleksi', type: 'uraian' as const, question: 'Alasanmu?', chosen: essay, weight: null, reverse: false, is_correct: null },
+    ];
+    const details = [
+      { fullName: 'Budi', participantNo: 'B', answers: ans('A', false, 3, null, null), events: [] },
+      { fullName: 'Ani', participantNo: 'A', answers: ans('B', true, 4, 2, 'Ingin hafal Quran'), events: [{ type: 'tab_hidden', created_at: '2026-11-14T02:00:00Z' }] },
+    ];
+    const b = await exportResultsXlsx([mk('Ani'), mk('Budi')], details);
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(await b.arrayBuffer());
+    expect(wb.worksheets.map((w) => w.name)).toEqual(['Hasil', 'Jawaban Soal', 'Kuesioner Skala', 'Keterangan Skala', 'Refleksi (Uraian)', 'Log Kejadian']);
+    const ks = wb.getWorksheet('Kuesioner Skala')!;
+    expect(ks.getRow(1).values).toEqual([, 'Nama', 'Nomor Peserta', 'No 2', 'No 3*', 'Total A. Keinginan']);
+    expect(ks.getRow(2).values).toEqual([, 'Ani', 'A', 4, 2, 6]);
+    expect(ks.getRow(3).getCell(4).value).toBe(''); // Budi tidak mengisi no 3
+    expect(ks.getRow(3).getCell(5).value).toBe(3);
+    const ket = wb.getWorksheet('Keterangan Skala')!;
+    expect(ket.getRow(2).getCell(3).value).toBe('Saya ingin mondok');
+    expect(ket.getRow(2).getCell(5).value).toBe(3.5);
+    expect(ket.getRow(3).getCell(4).value).toBe('Ya');
+    const ref = wb.getWorksheet('Refleksi (Uraian)')!;
+    expect(ref.getRow(1).getCell(3).value).toBe('4. Alasanmu?');
+    expect(ref.getRow(2).getCell(3).value).toBe('Ingin hafal Quran');
+    expect(wb.getWorksheet('Log Kejadian')!.rowCount).toBe(2);
+  });
 });

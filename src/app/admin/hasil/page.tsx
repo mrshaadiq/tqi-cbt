@@ -1,9 +1,9 @@
 'use client';
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { finalizeExpired, getExam, listParticipants, questionSummary, results, setPassed, type ResultDbRow } from '@/lib/adminApi';
+import { attemptDetail, finalizeExpired, getExam, listParticipants, questionSummary, results, setPassed, type ResultDbRow } from '@/lib/adminApi';
 import { supabase } from '@/lib/supabase';
-import { downloadBlob, exportResultsXlsx } from '@/lib/export/excel';
+import { downloadBlob, exportResultsXlsx, type ParticipantDetail } from '@/lib/export/excel';
 import { Badge, Button, Icon, Spinner } from '@/components/ui';
 
 const cols = 'md:grid md:grid-cols-[40px_220px_110px_190px_90px_130px_1fr] md:items-center md:gap-3';
@@ -26,6 +26,7 @@ export default function HasilPage() {
   const [accounts, setAccounts] = useState(0);
   const [exam, setExam] = useState<{ id: string; title: string } | null>(null);
   const [msg, setMsg] = useState('');
+  const [exporting, setExporting] = useState(false);
 
   const load = useCallback(() => results().then(setRows).catch((e) => setMsg(e.message)), []);
   useEffect(() => {
@@ -62,12 +63,29 @@ export default function HasilPage() {
         <div className="flex-1" />
         <div className="flex gap-3">
           <Button variant="secondary" disabled={!exam} onClick={async () => { setMsg(`${await finalizeExpired(exam!.id)} peserta yang waktunya habis dinilai.`); await load(); }}>Finalisasi waktu habis</Button>
-          <Button onClick={async () => downloadBlob(await exportResultsXlsx(rows.map((r) => ({
-            rank: r.rank, fullName: r.full_name, participantNo: r.participant_no, score: Number(r.score), correctCount: r.correct_count,
-            passed: r.passed, eventCount: r.kejadian,
-            sections: (r.section_scores ?? []).map((s) => ({ name: s.section, score: Number(s.score) })),
-            scales: (r.scale_scores ?? []).map((s) => ({ name: s.section, score: s.score, max: s.max })),
-          }))), 'hasil-tes.xlsx')}>Ekspor Excel</Button>
+          <Button disabled={exporting} onClick={async () => {
+            setExporting(true);
+            setMsg('Menyiapkan Excel lengkap (jawaban, kuesioner, refleksi)...');
+            try {
+              // detail diambil 5 peserta sekaligus supaya tidak membanjiri API
+              const details: ParticipantDetail[] = [];
+              for (let i = 0; i < rows.length; i += 5) {
+                const batch = await Promise.all(rows.slice(i, i + 5).map((r) => attemptDetail(r.attempt_id)));
+                batch.forEach((d) => details.push({ fullName: d.attempt.full_name, participantNo: d.attempt.participant_no, answers: d.rows, events: d.events }));
+              }
+              downloadBlob(await exportResultsXlsx(rows.map((r) => ({
+                rank: r.rank, fullName: r.full_name, participantNo: r.participant_no, score: Number(r.score), correctCount: r.correct_count,
+                passed: r.passed, eventCount: r.kejadian,
+                sections: (r.section_scores ?? []).map((s) => ({ name: s.section, score: Number(s.score) })),
+                scales: (r.scale_scores ?? []).map((s) => ({ name: s.section, score: s.score, max: s.max })),
+              })), details), 'hasil-tes.xlsx');
+              setMsg('');
+            } catch (e) {
+              setMsg(`Gagal ekspor: ${e instanceof Error ? e.message : e}`);
+            } finally {
+              setExporting(false);
+            }
+          }}>{exporting ? 'Menyiapkan...' : 'Ekspor Excel'}</Button>
         </div>
       </div>
 
